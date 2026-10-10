@@ -1,10 +1,16 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Alert from "@mui/material/Alert";
 import Button from "@mui/material/Button";
 import Stack from "@mui/material/Stack";
+import Table from "@mui/material/Table";
+import TableBody from "@mui/material/TableBody";
+import TableCell from "@mui/material/TableCell";
+import TableContainer from "@mui/material/TableContainer";
+import TableHead from "@mui/material/TableHead";
+import TableRow from "@mui/material/TableRow";
 import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 import {
@@ -21,8 +27,8 @@ import {
 } from "@/components/trips";
 import { centerFromPoints, stopsToMarkers } from "@/features/maps";
 import PortalShell from "@/features/shell/PortalShell";
-import { PageHeader, SectionCard, StatusChip } from "@/features/ui";
-import { apiPost, ApiError } from "@/lib/api";
+import { EmptyState, PageHeader, SectionCard, StatusChip } from "@/features/ui";
+import { apiGet, apiPost, ApiError } from "@/lib/api";
 import { primaryCollegeId, resolveHomePath, useAuth } from "@/lib/auth";
 import { hasRole } from "@/lib/roles";
 import { brand } from "@/theme/tokens";
@@ -42,13 +48,27 @@ export default function DriverPage() {
   const collegeId = user ? primaryCollegeId(user) : null;
   const [routeId, setRouteId] = useState("");
   const [busId, setBusId] = useState("");
+  const [scheduled, setScheduled] = useState<Trip[]>([]);
   const [trip, setTrip] = useState<Trip | null>(null);
   const [qrToken, setQrToken] = useState<string | null>(null);
   const [itinerary, setItinerary] = useState<ItineraryStop[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [distressInfo, setDistressInfo] = useState<string | null>(null);
   const [sessionStatus, setSessionStatus] = useState<
     "scheduled" | "active" | "ended" | "loading" | "error"
   >("scheduled");
+
+  const loadScheduled = useCallback(async () => {
+    if (!collegeId) return;
+    try {
+      const rows = await apiGet<Trip[]>(
+        `/colleges/${collegeId}/trips?status=scheduled`,
+      );
+      setScheduled(rows);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Could not load trips.");
+    }
+  }, [collegeId]);
 
   useEffect(() => {
     if (loading) return;
@@ -58,8 +78,10 @@ export default function DriverPage() {
     }
     if (!hasRole(user, "driver") && !user.is_platform_operator) {
       router.replace(resolveHomePath(user));
+      return;
     }
-  }, [loading, user, router]);
+    void loadScheduled();
+  }, [loading, user, router, loadScheduled]);
 
   async function createTrip() {
     if (!collegeId) return;
@@ -71,10 +93,26 @@ export default function DriverPage() {
       setTrip(created);
       setSessionStatus("scheduled");
       setError(null);
+      await loadScheduled();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Create trip failed.");
       setSessionStatus("error");
     }
+  }
+
+  function selectTrip(row: Trip) {
+    setTrip(row);
+    setSessionStatus(
+      row.status === "active"
+        ? "active"
+        : row.status === "ended"
+          ? "ended"
+          : "scheduled",
+    );
+    setQrToken(null);
+    setItinerary([]);
+    setError(null);
+    setDistressInfo(null);
   }
 
   async function start() {
@@ -90,6 +128,8 @@ export default function DriverPage() {
       setQrToken(result.qr_token);
       setItinerary(result.itinerary);
       setSessionStatus("active");
+      setError(null);
+      await loadScheduled();
       if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition((pos) => {
           void apiPost(`/colleges/${collegeId}/trips/${trip.id}/location`, {
@@ -123,10 +163,12 @@ export default function DriverPage() {
   async function distress() {
     if (!collegeId || !trip) return;
     const send = async (lat: number, lng: number) => {
-      await apiPost(`/colleges/${collegeId}/trips/${trip.id}/distress`, {
-        lat,
-        lng,
-      });
+      const result = await apiPost<{
+        emergency_reallocation: { id: string };
+      }>(`/colleges/${collegeId}/trips/${trip.id}/distress`, { lat, lng });
+      setDistressInfo(
+        `Emergency plan ${result.emergency_reallocation.id} — give this ID to college admin to confirm.`,
+      );
     };
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
@@ -152,9 +194,13 @@ export default function DriverPage() {
     <PortalShell title="Driver" description="Trip session controls" nav={[{ href: "/driver", label: "Trip" }]}>
       <PageHeader
         title="Trip session"
-        description="Start the session to show QR and share live location. End when the trip finishes."
+        description="Pick a scheduled trip to start, or create one from a confirmed route and your bus."
         actions={
-          trip ? <StatusChip status={sessionStatus === "loading" ? "processing" : sessionStatus} /> : null
+          trip ? (
+            <StatusChip
+              status={sessionStatus === "loading" ? "processing" : sessionStatus}
+            />
+          ) : null
         }
       />
       {error ? (
@@ -162,42 +208,106 @@ export default function DriverPage() {
           {error}
         </Alert>
       ) : null}
+      {distressInfo ? (
+        <Alert severity="warning" sx={{ mb: 2 }}>
+          {distressInfo}
+        </Alert>
+      ) : null}
 
-      <Stack spacing={3} sx={{ maxWidth: 720 }}>
+      <Stack spacing={3} sx={{ maxWidth: 800 }}>
         {!trip ? (
-          <SectionCard
-            title="Create scheduled trip"
-            description="Use a confirmed route ID and a bus assigned to your driver account."
-          >
-            <Stack spacing={2}>
-              <TextField
-                label="Route ID"
-                value={routeId}
-                onChange={(e) => setRouteId(e.target.value)}
-                fullWidth
-              />
-              <TextField
-                label="Bus ID"
-                value={busId}
-                onChange={(e) => setBusId(e.target.value)}
-                fullWidth
-              />
-              <Button
-                variant="contained"
-                size="large"
-                onClick={() => void createTrip()}
-                sx={{ alignSelf: "flex-start" }}
-              >
-                Create scheduled trip
-              </Button>
-            </Stack>
-          </SectionCard>
+          <>
+            <SectionCard
+              title="Your scheduled trips"
+              description="Select a trip created for your bus, then start the session."
+            >
+              {scheduled.length === 0 ? (
+                <EmptyState
+                  title="No scheduled trips"
+                  description="Create one below with a confirmed route ID and your bus ID."
+                />
+              ) : (
+                <TableContainer>
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>Trip</TableCell>
+                        <TableCell>Route</TableCell>
+                        <TableCell>Bus</TableCell>
+                        <TableCell align="right">Action</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {scheduled.map((row) => (
+                        <TableRow key={row.id} hover>
+                          <TableCell sx={{ fontFamily: "monospace", fontSize: 12 }}>
+                            {row.id.slice(0, 8)}…
+                          </TableCell>
+                          <TableCell sx={{ fontFamily: "monospace", fontSize: 12 }}>
+                            {row.route_id.slice(0, 8)}…
+                          </TableCell>
+                          <TableCell sx={{ fontFamily: "monospace", fontSize: 12 }}>
+                            {row.bus_id.slice(0, 8)}…
+                          </TableCell>
+                          <TableCell align="right">
+                            <Button size="small" variant="contained" onClick={() => selectTrip(row)}>
+                              Open
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              )}
+            </SectionCard>
+
+            <SectionCard
+              title="Create scheduled trip"
+              description="Use a confirmed route ID and a bus assigned to your driver account."
+            >
+              <Stack spacing={2}>
+                <TextField
+                  label="Route ID"
+                  value={routeId}
+                  onChange={(e) => setRouteId(e.target.value)}
+                  fullWidth
+                />
+                <TextField
+                  label="Bus ID"
+                  value={busId}
+                  onChange={(e) => setBusId(e.target.value)}
+                  fullWidth
+                />
+                <Button
+                  variant="outlined"
+                  size="large"
+                  onClick={() => void createTrip()}
+                  sx={{ alignSelf: "flex-start" }}
+                >
+                  Create scheduled trip
+                </Button>
+              </Stack>
+            </SectionCard>
+          </>
         ) : (
           <>
             <SectionCard title="Session">
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
                 Trip {trip.id}
               </Typography>
+              <Button
+                size="small"
+                sx={{ mb: 2 }}
+                onClick={() => {
+                  setTrip(null);
+                  setQrToken(null);
+                  setItinerary([]);
+                  void loadScheduled();
+                }}
+              >
+                Back to trip list
+              </Button>
               <TripSessionControls
                 status={sessionStatus}
                 onStart={() => void start()}
@@ -208,6 +318,9 @@ export default function DriverPage() {
 
             {qrToken ? (
               <SectionCard title="Boarding QR">
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                  Students need this trip ID plus the token below.
+                </Typography>
                 <TripQrPanel status="active" qrValue={qrToken} />
               </SectionCard>
             ) : null}

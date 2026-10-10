@@ -30,6 +30,7 @@ const nav = [
   { href: "/admin/buses", label: "Buses" },
   { href: "/admin/import", label: "Import" },
   { href: "/admin/planning", label: "Planning" },
+  { href: "/admin/emergency", label: "Emergency" },
 ];
 
 export default function AdminCampusesPage() {
@@ -41,6 +42,10 @@ export default function AdminCampusesPage() {
   const [code, setCode] = useState("MAIN");
   const [domain, setDomain] = useState("");
   const [domainToken, setDomainToken] = useState<string | null>(null);
+  const [maxWalk, setMaxWalk] = useState("800");
+  const [clusterEps, setClusterEps] = useState("500");
+  const [minSamples, setMinSamples] = useState("2");
+  const [minPerRoute, setMinPerRoute] = useState("2");
 
   const collegeId = user ? primaryCollegeId(user) : null;
 
@@ -81,12 +86,13 @@ export default function AdminCampusesPage() {
     if (!collegeId) return;
     try {
       await apiPut(`/colleges/${collegeId}/campuses/${campusId}/settings`, {
-        max_walk_to_stop_m: 500,
-        cluster_eps_m: 400,
-        cluster_min_samples: 3,
-        min_students_per_route: 5,
+        max_walk_to_stop_m: Number(maxWalk),
+        cluster_eps_m: Number(clusterEps),
+        cluster_min_samples: Number(minSamples),
+        min_students_per_route: Number(minPerRoute),
       });
       await load(collegeId);
+      setError(null);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Settings failed.");
     }
@@ -170,13 +176,9 @@ export default function AdminCampusesPage() {
                         />
                       </TableCell>
                       <TableCell align="right">
-                        {!c.settings ? (
-                          <Button size="small" onClick={() => void saveSettings(c.id)}>
-                            Apply defaults
-                          </Button>
-                        ) : (
-                          "—"
-                        )}
+                        <Button size="small" onClick={() => void saveSettings(c.id)}>
+                          {c.settings ? "Update settings" : "Save settings"}
+                        </Button>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -185,22 +187,51 @@ export default function AdminCampusesPage() {
             </TableContainer>
           )}
 
-          <Stack direction={{ xs: "column", sm: "row" }} spacing={2} sx={{ mt: 2 }}>
-            <TextField
-              label="Campus name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              fullWidth
-            />
-            <TextField
-              label="Code"
-              value={code}
-              onChange={(e) => setCode(e.target.value)}
-              fullWidth
-            />
-            <Button variant="contained" onClick={() => void createCampus()}>
-              Create
-            </Button>
+          <Stack spacing={2} sx={{ mt: 2 }}>
+            <Typography variant="subtitle2">Planning settings (applied per campus)</Typography>
+            <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
+              <TextField
+                label="Max walk to stop (m)"
+                value={maxWalk}
+                onChange={(e) => setMaxWalk(e.target.value)}
+                fullWidth
+              />
+              <TextField
+                label="Cluster eps (m)"
+                value={clusterEps}
+                onChange={(e) => setClusterEps(e.target.value)}
+                fullWidth
+              />
+              <TextField
+                label="Min samples"
+                value={minSamples}
+                onChange={(e) => setMinSamples(e.target.value)}
+                fullWidth
+              />
+              <TextField
+                label="Min students / route"
+                value={minPerRoute}
+                onChange={(e) => setMinPerRoute(e.target.value)}
+                fullWidth
+              />
+            </Stack>
+            <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
+              <TextField
+                label="Campus name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                fullWidth
+              />
+              <TextField
+                label="Code"
+                value={code}
+                onChange={(e) => setCode(e.target.value)}
+                fullWidth
+              />
+              <Button variant="contained" onClick={() => void createCampus()}>
+                Create campus
+              </Button>
+            </Stack>
           </Stack>
         </SectionCard>
 

@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 
 from app.api.deps import CurrentUser, DbSession, require_college_admin_access
 from app.models.user import User
@@ -27,6 +27,20 @@ from app.services import trips as trip_service
 from app.services.auth import require_college_roles
 
 router = APIRouter(tags=["trips"])
+
+
+@router.get(
+    "/colleges/{college_id}/trips",
+    response_model=list[TripOut],
+)
+def list_trips(
+    college_id: uuid.UUID,
+    db: DbSession,
+    user: CurrentUser,
+    status: Annotated[str | None, Query()] = None,
+) -> list[TripOut]:
+    rows = trip_service.list_trips(db, college_id, user, status=status)
+    return [TripOut.model_validate(t) for t in rows]
 
 
 @router.post(

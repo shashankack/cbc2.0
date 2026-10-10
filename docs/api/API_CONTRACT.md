@@ -71,6 +71,7 @@
 
 | Method | Path | Auth | Purpose |
 |--------|------|------|---------|
+| GET | `/colleges/{college_id}/trips` | driver or college_admin | List trips (`?status=` optional; drivers see own only) |
 | POST | `/colleges/{college_id}/trips` | driver or college_admin | Create scheduled trip |
 | POST | `/colleges/{college_id}/trips/{trip_id}/start` | driver | Start session + QR + itinerary |
 | POST | `/colleges/{college_id}/trips/{trip_id}/qr/refresh` | driver | New QR token |

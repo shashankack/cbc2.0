@@ -20,6 +20,7 @@ const nav = [
   { href: "/admin/buses", label: "Buses" },
   { href: "/admin/import", label: "Import" },
   { href: "/admin/planning", label: "Planning" },
+  { href: "/admin/emergency", label: "Emergency" },
 ];
 
 export default function AdminImportPage() {

@@ -92,6 +92,35 @@ def create_trip(
     return trip
 
 
+def list_trips(
+    db: Session,
+    college_id: uuid.UUID,
+    actor: User,
+    *,
+    status: str | None = None,
+) -> list[Trip]:
+    """List trips. Drivers see only their own; admins/operators see college-wide."""
+    from app.services.auth import require_college_roles
+
+    is_admin = False
+    try:
+        require_college_roles(db, actor, college_id, {"college_admin"})
+        is_admin = True
+    except AppError:
+        require_college_roles(db, actor, college_id, {"driver"})
+
+    stmt = (
+        select(Trip)
+        .where(Trip.college_id == college_id)
+        .order_by(Trip.created_at.desc())
+    )
+    if status:
+        stmt = stmt.where(Trip.status == status)
+    if not is_admin and not actor.is_platform_operator:
+        stmt = stmt.where(Trip.driver_user_id == actor.id)
+    return list(db.scalars(stmt).all())
+
+
 def _get_trip(db: Session, college_id: uuid.UUID, trip_id: uuid.UUID) -> Trip:
     trip = db.scalar(
         select(Trip).where(Trip.id == trip_id, Trip.college_id == college_id)
