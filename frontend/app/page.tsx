@@ -1,8 +1,10 @@
 import DirectionsBusIcon from "@mui/icons-material/DirectionsBus";
 import Box from "@mui/material/Box";
+import Button from "@mui/material/Button";
 import Container from "@mui/material/Container";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
+import NextLink from "next/link";
 
 export default function Home() {
   return (
@@ -17,14 +19,10 @@ export default function Home() {
       }}
     >
       <Container maxWidth="md">
-        <Stack spacing={2}>
+        <Stack spacing={3}>
           <Stack direction="row" spacing={1.5} sx={{ alignItems: "center" }}>
             <DirectionsBusIcon color="primary" fontSize="large" />
-            <Typography
-              variant="h3"
-              component="h1"
-              sx={{ fontWeight: 700 }}
-            >
+            <Typography variant="h3" component="h1" sx={{ fontWeight: 700 }}>
               College Bus System
             </Typography>
           </Stack>
@@ -33,12 +31,22 @@ export default function Home() {
             color="text.secondary"
             sx={{ maxWidth: 560 }}
           >
-            Multi-college route management, seat allocation, and QR boarding —
-            scaffold ready for Stage 2+.
+            Excel planning, locked pickups, QR boarding, and live driver
+            tracking — without heavy ML.
           </Typography>
-          <Typography variant="body2" color="text.secondary">
-            Portals: Student · College Admin · Platform Operator · Driver
-          </Typography>
+          <Stack direction="row" spacing={2}>
+            <Button
+              component={NextLink}
+              href="/login"
+              variant="contained"
+              size="large"
+            >
+              Sign in with email OTP
+            </Button>
+            <Button component={NextLink} href="/app" variant="outlined" size="large">
+              Open portal
+            </Button>
+          </Stack>
         </Stack>
       </Container>
     </Box>
