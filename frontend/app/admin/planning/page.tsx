@@ -16,15 +16,30 @@ import TableHead from "@mui/material/TableHead";
 import TableRow from "@mui/material/TableRow";
 import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
-import { PlanConfirmBar } from "@/components/planning";
+import {
+  formatApproxDistance,
+  formatApproxMinutes,
+} from "@/components/maps/approxLabels";
+import {
+  PlanConfirmBar,
+  PlanStopEditor,
+  type PlanEditMode,
+} from "@/components/planning";
 import { ADMIN_NAV } from "@/features/admin/nav";
 import PortalShell from "@/features/shell/PortalShell";
-import { centerFromPoints, routesToPolylines } from "@/features/maps";
+import {
+  approxMinutesFromMeters,
+  centerFromPoints,
+  haversineMeters,
+  roundCoord,
+  routesToPolylines,
+  stopsToMarkers,
+} from "@/features/maps";
 import { PageHeader, SectionCard, StatusChip } from "@/features/ui";
-import { apiGet, apiPost, ApiError } from "@/lib/api";
+import { apiGet, apiPost, apiPut, ApiError } from "@/lib/api";
 import { primaryCollegeId, resolveHomePath, useAuth } from "@/lib/auth";
 import { hasRole } from "@/lib/roles";
-import type { Campus, ImportBatch, PlanningRun } from "@/types/api";
+import type { Campus, ImportBatch, PlanningRun, Student } from "@/types/api";
 
 const PlanningProposalMap = dynamic(
   () => import("@/features/maps/PlanningProposalMap"),
@@ -57,6 +72,7 @@ function AdminPlanningPageInner() {
   const [batches, setBatches] = useState<ImportBatch[]>([]);
   const [runs, setRuns] = useState<RunSummary[]>([]);
   const [run, setRun] = useState<PlanningRun | null>(null);
+  const [students, setStudents] = useState<Student[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
   const [running, setRunning] = useState(false);
@@ -64,6 +80,23 @@ function AdminPlanningPageInner() {
     {},
   );
   const [assignBusy, setAssignBusy] = useState<string | null>(null);
+
+  const [editMode, setEditMode] = useState<PlanEditMode>(null);
+  const [draftPoint, setDraftPoint] = useState<{ lat: number; lng: number } | null>(
+    null,
+  );
+  const [stopName, setStopName] = useState("");
+  const [routeIdForNew, setRouteIdForNew] = useState("");
+  const [absorbStopId, setAbsorbStopId] = useState("");
+  const [intoStopId, setIntoStopId] = useState("");
+  const [splitStopId, setSplitStopId] = useState("");
+  const [splitStudentIds, setSplitStudentIds] = useState<string[]>([]);
+  const [editBusy, setEditBusy] = useState(false);
+  const [mapReady, setMapReady] = useState(false);
+
+  useEffect(() => {
+    setMapReady(true);
+  }, []);
 
   useEffect(() => {
     if (loading) return;
@@ -84,11 +117,13 @@ function AdminPlanningPageInner() {
       apiGet<Campus[]>(`/colleges/${collegeId}/campuses`),
       apiGet<ImportBatch[]>(`/colleges/${collegeId}/imports/students`),
       apiGet<RunSummary[]>(`/colleges/${collegeId}/planning-runs`),
+      apiGet<Student[]>(`/colleges/${collegeId}/students`),
     ])
-      .then(async ([campusRows, batchRows, runRows]) => {
+      .then(async ([campusRows, batchRows, runRows, studentRows]) => {
         setCampuses(campusRows);
         setBatches(batchRows);
         setRuns(runRows);
+        setStudents(studentRows);
         const nextCampus =
           qCampus ||
           batchRows[0]?.campus_id ||
@@ -102,6 +137,7 @@ function AdminPlanningPageInner() {
             `/colleges/${collegeId}/planning-runs/${latest.id}`,
           );
           setRun(detail);
+          if (detail.routes[0]) setRouteIdForNew(detail.routes[0].id);
         }
       })
       .catch((err: unknown) => {
@@ -113,6 +149,59 @@ function AdminPlanningPageInner() {
     () => batches.filter((b) => !campusId || b.campus_id === campusId),
     [batches, campusId],
   );
+
+  const studentById = useMemo(() => {
+    const map = new Map<string, Student>();
+    for (const s of students) map.set(s.id, s);
+    return map;
+  }, [students]);
+
+  const editorStops = useMemo(() => {
+    if (!run) return [];
+    return run.stops
+      .filter((s) => s.source !== "campus")
+      .map((s) => ({
+        id: s.id,
+        name: s.name,
+        studentCount: run.items.filter((i) => i.stop_id === s.id).length,
+      }));
+  }, [run]);
+
+  const studentsOnSplitStop = useMemo(() => {
+    if (!run || !splitStopId) return [];
+    return run.items
+      .filter((i) => i.stop_id === splitStopId)
+      .map((i) => {
+        const st = studentById.get(i.student_id);
+        return {
+          id: i.student_id,
+          label: st
+            ? `${st.full_name} (${st.srn})`
+            : `Student ${i.student_id.slice(0, 8)}…`,
+        };
+      });
+  }, [run, splitStopId, studentById]);
+
+  const draftLabel = draftPoint
+    ? `${draftPoint.lat.toFixed(5)}, ${draftPoint.lng.toFixed(5)}`
+    : null;
+
+  function resetEditDraft() {
+    setDraftPoint(null);
+    setStopName("");
+    setAbsorbStopId("");
+    setIntoStopId("");
+    setSplitStopId("");
+    setSplitStudentIds([]);
+  }
+
+  function changeEditMode(mode: PlanEditMode) {
+    setEditMode(mode);
+    resetEditDraft();
+    if (mode === "place" && run?.routes[0] && !routeIdForNew) {
+      setRouteIdForNew(run.routes[0].id);
+    }
+  }
 
   async function runPlanning() {
     if (!collegeId || !campusId) return;
@@ -127,6 +216,8 @@ function AdminPlanningPageInner() {
       );
       setRun(result);
       setRuns((prev) => [result, ...prev.filter((r) => r.id !== result.id)]);
+      setRouteIdForNew(result.routes[0]?.id ?? "");
+      changeEditMode(null);
       setError(null);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Planning failed.");
@@ -142,6 +233,8 @@ function AdminPlanningPageInner() {
         `/colleges/${collegeId}/planning-runs/${id}`,
       );
       setRun(detail);
+      setRouteIdForNew(detail.routes[0]?.id ?? "");
+      changeEditMode(null);
       setError(null);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Load run failed.");
@@ -159,10 +252,129 @@ function AdminPlanningPageInner() {
       setRuns((prev) =>
         prev.map((r) => (r.id === result.id ? { ...r, ...result } : r)),
       );
+      changeEditMode(null);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Confirm failed.");
     } finally {
       setConfirming(false);
+    }
+  }
+
+  async function createManualStop() {
+    if (!collegeId || !run || !draftPoint || !routeIdForNew) return;
+    setEditBusy(true);
+    try {
+      const result = await apiPost<PlanningRun>(
+        `/colleges/${collegeId}/planning-runs/${run.id}/stops`,
+        {
+          name: stopName.trim(),
+          lat: draftPoint.lat,
+          lng: draftPoint.lng,
+          route_id: routeIdForNew,
+        },
+      );
+      setRun(result);
+      resetEditDraft();
+      setEditMode(null);
+      setError(null);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Create stop failed.");
+    } finally {
+      setEditBusy(false);
+    }
+  }
+
+  async function combineStops() {
+    if (!collegeId || !run || !absorbStopId || !intoStopId) return;
+    setEditBusy(true);
+    try {
+      const result = await apiPost<PlanningRun>(
+        `/colleges/${collegeId}/planning-runs/${run.id}/stops/merge`,
+        { keep_stop_id: intoStopId, merge_stop_id: absorbStopId },
+      );
+      setRun(result);
+      resetEditDraft();
+      setEditMode(null);
+      setError(null);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Combine failed.");
+    } finally {
+      setEditBusy(false);
+    }
+  }
+
+  function onSplitStopPicked(stopId: string) {
+    setSplitStopId(stopId);
+    setSplitStudentIds([]);
+    const stop = run?.stops.find((s) => s.id === stopId);
+    if (!stop) return;
+    setStopName(`${stop.name} B`);
+    setDraftPoint(null);
+  }
+
+  async function splitStop() {
+    if (!collegeId || !run || !splitStopId || !stopName.trim()) return;
+    if (!splitStudentIds.length) {
+      setError("Select at least one student to move.");
+      return;
+    }
+    const source = run.stops.find((s) => s.id === splitStopId);
+    if (!source) return;
+    const lat = draftPoint?.lat ?? roundCoord(source.lat + 0.0004);
+    const lng = draftPoint?.lng ?? roundCoord(source.lng + 0.0004);
+    setEditBusy(true);
+    try {
+      const result = await apiPost<PlanningRun>(
+        `/colleges/${collegeId}/planning-runs/${run.id}/stops/split`,
+        {
+          stop_id: splitStopId,
+          name: stopName.trim(),
+          lat,
+          lng,
+          student_ids: splitStudentIds,
+        },
+      );
+      setRun(result);
+      resetEditDraft();
+      setEditMode(null);
+      setError(null);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Split failed.");
+    } finally {
+      setEditBusy(false);
+    }
+  }
+
+  async function movePickup(routeId: string, stopId: string, dir: -1 | 1) {
+    if (!collegeId || !run) return;
+    const route = run.routes.find((r) => r.id === routeId);
+    if (!route) return;
+    const pickups = [...route.route_stops]
+      .sort((a, b) => a.sequence - b.sequence)
+      .filter((s) => {
+        const stop = run.stops.find((st) => st.id === s.stop_id);
+        return stop?.source !== "campus";
+      })
+      .map((s) => s.stop_id);
+    const idx = pickups.indexOf(stopId);
+    const swap = idx + dir;
+    if (idx < 0 || swap < 0 || swap >= pickups.length) return;
+    const next = [...pickups];
+    const tmp = next[idx]!;
+    next[idx] = next[swap]!;
+    next[swap] = tmp;
+    setEditBusy(true);
+    try {
+      const result = await apiPut<PlanningRun>(
+        `/colleges/${collegeId}/planning-runs/${run.id}/routes/${routeId}/stops`,
+        { stop_ids: next },
+      );
+      setRun(result);
+      setError(null);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Reorder failed.");
+    } finally {
+      setEditBusy(false);
     }
   }
 
@@ -200,15 +412,9 @@ function AdminPlanningPageInner() {
 
   const mapLayers = useMemo(() => {
     if (!run) return null;
-    const depotStop =
-      run.stops.find((s) => s.source === "campus") ??
-      run.routes
-        .flatMap((r) => r.route_stops)
-        .sort((a, b) => a.sequence - b.sequence)
-        .find((s) => s.lat != null && s.lng != null) ??
-      null;
+    const depotStop = run.stops.find((s) => s.source === "campus");
     const depot =
-      depotStop && depotStop.lat != null && depotStop.lng != null
+      depotStop != null
         ? {
             lat: depotStop.lat,
             lng: depotStop.lng,
@@ -218,21 +424,18 @@ function AdminPlanningPageInner() {
                 : "Campus depot",
           }
         : null;
-    // Pickup centroids only — campus depot is rendered separately.
     const centroids = run.stops
       .filter((s) => s.source !== "campus")
       .map((s) => ({
         id: s.id,
-        label: s.name,
+        label: `${s.name} (${run.items.filter((i) => i.stop_id === s.id).length})`,
         lat: s.lat,
         lng: s.lng,
       }));
     const polylines = routesToPolylines(run.routes);
     const stopMarkers = run.routes.flatMap((route) => {
-      const ordered = [...route.route_stops].sort(
-        (a, b) => a.sequence - b.sequence,
-      );
-      return ordered
+      const ordered = [...route.route_stops]
+        .sort((a, b) => a.sequence - b.sequence)
         .filter(
           (
             s,
@@ -243,22 +446,22 @@ function AdminPlanningPageInner() {
             lat: number;
             lng: number;
           } => s.lat != null && s.lng != null,
-        )
-        // Skip campus bookends — DepotMarker + dashed return show the loop.
-        .filter((s) => {
-          if (!depot) return true;
-          return (
-            Math.abs(s.lat - depot.lat) > 1e-5 ||
-            Math.abs(s.lng - depot.lng) > 1e-5
-          );
-        })
-        .map((s) => ({
-          id: `${route.id}-${s.stop_id}-${s.sequence}`,
+        );
+      return stopsToMarkers(
+        ordered.map((s) => ({
+          stop_id: `${route.id}-${s.stop_id}`,
           sequence: s.sequence,
-          label: s.name ?? s.stop_id.slice(0, 8),
+          name: s.name ?? s.stop_id.slice(0, 8),
           lat: s.lat,
           lng: s.lng,
-        }));
+        })),
+      ).filter((s) => {
+        if (!depot) return true;
+        return (
+          Math.abs(s.lat - depot.lat) > 1e-5 ||
+          Math.abs(s.lng - depot.lng) > 1e-5
+        );
+      });
     });
     const points = [
       ...centroids.map((c) => ({ lat: c.lat, lng: c.lng })),
@@ -318,12 +521,12 @@ function AdminPlanningPageInner() {
                 setCampusId(e.target.value);
                 setBatchId("");
               }}
-              helperText="Planning uses students and available buses on this campus only."
               fullWidth
+              helperText="Planning uses students and available buses on this campus only."
             >
               {campuses.map((c) => (
                 <MenuItem key={c.id} value={c.id}>
-                  {c.name} ({c.code})
+                  {c.code} — {c.name}
                 </MenuItem>
               ))}
             </TextField>
@@ -332,15 +535,14 @@ function AdminPlanningPageInner() {
               label="Import batch"
               value={batchId}
               onChange={(e) => setBatchId(e.target.value)}
-              helperText="Optional — leave empty to use all imported students on the campus."
               fullWidth
+              helperText="Optional — leave empty to use all imported students on the campus."
             >
               <MenuItem value="">All imported students on campus</MenuItem>
               {campusBatches.map((b) => (
                 <MenuItem key={b.id} value={b.id}>
-                  {b.filename} · {b.active_student_count ?? b.valid_count} active
-                  {" / "}
-                  {b.locked_student_count ?? 0} locked
+                  {new Date(b.created_at).toLocaleString()}
+                  {b.valid_count != null ? ` · ${b.valid_count} valid` : ""}
                   {b.is_active ? " · active" : ""}
                 </MenuItem>
               ))}
@@ -401,14 +603,11 @@ function AdminPlanningPageInner() {
           >
             <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
               {campusCode ? `${campusCode} · ` : ""}
-              Run {run.id.slice(0, 8)} · routes {run.routes.length} · items{" "}
+              Run {run.id.slice(0, 8)} · routes {run.routes.length} · students{" "}
               {run.items.length}
               {typeof review === "number" ? ` · review ${review}` : ""}
               {run.status === "confirmed"
                 ? " · pickups locked for students"
-                : ""}
-              {mapLayers?.depot
-                ? " · solid path = outbound, dashed = return to campus"
                 : ""}
             </Typography>
             {campusCode === "MAIN" &&
@@ -418,16 +617,71 @@ function AdminPlanningPageInner() {
                 re-run planning on campus RING.
               </Alert>
             ) : null}
-            <PlanningProposalMap
-              center={mapLayers?.center ?? null}
-              centroids={mapLayers?.centroids ?? []}
-              polylines={mapLayers?.polylines ?? []}
-              stopMarkers={mapLayers?.stopMarkers ?? []}
-              depot={mapLayers?.depot ?? null}
-            />
+
+            {run.status === "proposed" ? (
+              <Stack sx={{ mb: 2 }}>
+                <PlanStopEditor
+                  mode={editMode}
+                  onModeChange={changeEditMode}
+                  stops={editorStops}
+                  routes={run.routes.map((r) => ({ id: r.id, name: r.name }))}
+                  studentsOnSplitStop={studentsOnSplitStop}
+                  draftLabel={draftLabel}
+                  busy={editBusy}
+                  stopName={stopName}
+                  onStopNameChange={setStopName}
+                  routeId={routeIdForNew}
+                  onRouteIdChange={setRouteIdForNew}
+                  onCreateStop={() => void createManualStop()}
+                  absorbStopId={absorbStopId}
+                  intoStopId={intoStopId}
+                  onAbsorbStopIdChange={setAbsorbStopId}
+                  onIntoStopIdChange={setIntoStopId}
+                  onCombine={() => void combineStops()}
+                  splitStopId={splitStopId}
+                  onSplitStopIdChange={onSplitStopPicked}
+                  splitStudentIds={splitStudentIds}
+                  onSplitStudentIdsChange={setSplitStudentIds}
+                  onSplit={() => void splitStop()}
+                />
+              </Stack>
+            ) : null}
+
+            {mapReady ? (
+              <PlanningProposalMap
+                center={mapLayers?.center ?? null}
+                centroids={mapLayers?.centroids ?? []}
+                polylines={mapLayers?.polylines ?? []}
+                stopMarkers={mapLayers?.stopMarkers ?? []}
+                depot={mapLayers?.depot ?? null}
+                pickMode={editMode === "place" || editMode === "split"}
+                draftPoint={draftPoint}
+                onMapPick={(p) =>
+                  setDraftPoint({
+                    lat: roundCoord(p.lat),
+                    lng: roundCoord(p.lng),
+                  })
+                }
+              />
+            ) : (
+              <Stack
+                sx={{
+                  height: 420,
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <CircularProgress size={28} aria-label="Loading map" />
+              </Stack>
+            )}
+
             {run.routes.length > 0 ? (
               <Stack spacing={2} sx={{ mt: 2 }}>
-                <Typography variant="subtitle2">Routes</Typography>
+                <Typography variant="subtitle2">Route order</Typography>
+                <Typography variant="body2" color="text.secondary">
+                  ↑ ↓ moves a pickup earlier or later on that bus. Campus start/end
+                  stay fixed.
+                </Typography>
                 {run.routes.map((route) => (
                   <Stack key={route.id} spacing={1}>
                     <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
@@ -438,29 +692,101 @@ function AdminPlanningPageInner() {
                       <Table size="small">
                         <TableHead>
                           <TableRow>
-                            <TableCell width={72}>Seq</TableCell>
+                            <TableCell width={56}>#</TableCell>
                             <TableCell>Stop</TableCell>
-                            <TableCell>Lat</TableCell>
-                            <TableCell>Lng</TableCell>
+                            <TableCell>Students</TableCell>
+                            <TableCell>From prev</TableCell>
+                            {run.status === "proposed" ? (
+                              <TableCell align="right">Order</TableCell>
+                            ) : null}
                           </TableRow>
                         </TableHead>
                         <TableBody>
                           {[...route.route_stops]
                             .sort((a, b) => a.sequence - b.sequence)
-                            .map((s) => (
-                              <TableRow key={`${route.id}-${s.stop_id}-${s.sequence}`}>
-                                <TableCell>{s.sequence}</TableCell>
-                                <TableCell>
-                                  {s.name ?? s.stop_id.slice(0, 8)}
-                                </TableCell>
-                                <TableCell>
-                                  {s.lat != null ? s.lat.toFixed(5) : "—"}
-                                </TableCell>
-                                <TableCell>
-                                  {s.lng != null ? s.lng.toFixed(5) : "—"}
-                                </TableCell>
-                              </TableRow>
-                            ))}
+                            .map((s, idx, ordered) => {
+                              const stopMeta = run.stops.find(
+                                (st) => st.id === s.stop_id,
+                              );
+                              const isCampus = stopMeta?.source === "campus";
+                              const studentCount = isCampus
+                                ? 0
+                                : run.items.filter((i) => i.stop_id === s.stop_id)
+                                    .length;
+                              const prev = idx > 0 ? ordered[idx - 1] : null;
+                              const distM =
+                                prev != null &&
+                                prev.lat != null &&
+                                prev.lng != null &&
+                                s.lat != null &&
+                                s.lng != null
+                                  ? Math.round(
+                                      haversineMeters(
+                                        { lat: prev.lat, lng: prev.lng },
+                                        { lat: s.lat, lng: s.lng },
+                                      ),
+                                    )
+                                  : null;
+                              return (
+                                <TableRow
+                                  key={`${route.id}-${s.stop_id}-${s.sequence}`}
+                                >
+                                  <TableCell>{s.sequence}</TableCell>
+                                  <TableCell>
+                                    {s.name ?? s.stop_id.slice(0, 8)}
+                                    {isCampus ? " (campus)" : ""}
+                                  </TableCell>
+                                  <TableCell>
+                                    {isCampus ? "—" : studentCount}
+                                  </TableCell>
+                                  <TableCell>
+                                    {distM != null
+                                      ? `${formatApproxDistance(distM)} · ${formatApproxMinutes(approxMinutesFromMeters(distM))}`
+                                      : "—"}
+                                  </TableCell>
+                                  {run.status === "proposed" ? (
+                                    <TableCell align="right">
+                                      {isCampus ? (
+                                        "—"
+                                      ) : (
+                                        <Stack
+                                          direction="row"
+                                          spacing={0.5}
+                                          sx={{ justifyContent: "flex-end" }}
+                                        >
+                                          <Button
+                                            size="small"
+                                            disabled={editBusy}
+                                            onClick={() =>
+                                              void movePickup(
+                                                route.id,
+                                                s.stop_id,
+                                                -1,
+                                              )
+                                            }
+                                          >
+                                            ↑
+                                          </Button>
+                                          <Button
+                                            size="small"
+                                            disabled={editBusy}
+                                            onClick={() =>
+                                              void movePickup(
+                                                route.id,
+                                                s.stop_id,
+                                                1,
+                                              )
+                                            }
+                                          >
+                                            ↓
+                                          </Button>
+                                        </Stack>
+                                      )}
+                                    </TableCell>
+                                  ) : null}
+                                </TableRow>
+                              );
+                            })}
                         </TableBody>
                       </Table>
                     </TableContainer>
@@ -468,19 +794,20 @@ function AdminPlanningPageInner() {
                 ))}
               </Stack>
             ) : null}
+
             {run.status === "proposed" &&
             run.items.some((i) => i.status === "needs_admin_review") ? (
               <Stack spacing={1.5} sx={{ mt: 2 }}>
                 <Typography variant="subtitle2">Needs admin review</Typography>
                 <Typography variant="body2" color="text.secondary">
-                  Assign each outlier to an existing stop before confirm (optional
-                  route/bus inferred from that stop).
+                  These students were not packed onto a stop. Assign each to a
+                  pickup before confirm.
                 </Typography>
                 <TableContainer>
                   <Table size="small">
                     <TableHead>
                       <TableRow>
-                        <TableCell>Student item</TableCell>
+                        <TableCell>Student</TableCell>
                         <TableCell>Assign stop</TableCell>
                         <TableCell align="right">Action</TableCell>
                       </TableRow>
@@ -488,46 +815,51 @@ function AdminPlanningPageInner() {
                     <TableBody>
                       {run.items
                         .filter((i) => i.status === "needs_admin_review")
-                        .map((item) => (
-                          <TableRow key={item.id} hover>
-                            <TableCell sx={{ fontFamily: "monospace", fontSize: 12 }}>
-                              {item.student_id.slice(0, 8)}…
-                            </TableCell>
-                            <TableCell>
-                              <TextField
-                                select
-                                size="small"
-                                label="Stop"
-                                value={assignStopByItem[item.id] ?? ""}
-                                onChange={(e) =>
-                                  setAssignStopByItem((prev) => ({
-                                    ...prev,
-                                    [item.id]: e.target.value,
-                                  }))
-                                }
-                                fullWidth
-                              >
-                                {run.stops
-                                  .filter((s) => s.source !== "campus")
-                                  .map((s) => (
-                                    <MenuItem key={s.id} value={s.id}>
-                                      {s.name}
-                                    </MenuItem>
-                                  ))}
-                              </TextField>
-                            </TableCell>
-                            <TableCell align="right">
-                              <Button
-                                size="small"
-                                variant="outlined"
-                                disabled={assignBusy === item.id}
-                                onClick={() => void assignReviewItem(item.id)}
-                              >
-                                {assignBusy === item.id ? "Saving…" : "Assign"}
-                              </Button>
-                            </TableCell>
-                          </TableRow>
-                        ))}
+                        .map((item) => {
+                          const st = studentById.get(item.student_id);
+                          return (
+                            <TableRow key={item.id} hover>
+                              <TableCell>
+                                {st
+                                  ? `${st.full_name} (${st.srn})`
+                                  : `${item.student_id.slice(0, 8)}…`}
+                              </TableCell>
+                              <TableCell>
+                                <TextField
+                                  select
+                                  size="small"
+                                  label="Stop"
+                                  value={assignStopByItem[item.id] ?? ""}
+                                  onChange={(e) =>
+                                    setAssignStopByItem((prev) => ({
+                                      ...prev,
+                                      [item.id]: e.target.value,
+                                    }))
+                                  }
+                                  fullWidth
+                                >
+                                  {run.stops
+                                    .filter((s) => s.source !== "campus")
+                                    .map((s) => (
+                                      <MenuItem key={s.id} value={s.id}>
+                                        {s.name}
+                                      </MenuItem>
+                                    ))}
+                                </TextField>
+                              </TableCell>
+                              <TableCell align="right">
+                                <Button
+                                  size="small"
+                                  variant="outlined"
+                                  disabled={assignBusy === item.id}
+                                  onClick={() => void assignReviewItem(item.id)}
+                                >
+                                  {assignBusy === item.id ? "Saving…" : "Assign"}
+                                </Button>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
                     </TableBody>
                   </Table>
                 </TableContainer>

@@ -1,4 +1,4 @@
-import type { MapLatLng } from "@/components/maps";
+import type { MapLatLng } from "@/components/maps/types";
 
 export type PlaceHit = {
   label: string;

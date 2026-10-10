@@ -1,14 +1,21 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Alert from "@mui/material/Alert";
 import Button from "@mui/material/Button";
+import MenuItem from "@mui/material/MenuItem";
 import Stack from "@mui/material/Stack";
+import Table from "@mui/material/Table";
+import TableBody from "@mui/material/TableBody";
+import TableCell from "@mui/material/TableCell";
+import TableContainer from "@mui/material/TableContainer";
+import TableHead from "@mui/material/TableHead";
+import TableRow from "@mui/material/TableRow";
 import TextField from "@mui/material/TextField";
 import PortalShell from "@/features/shell/PortalShell";
-import { PageHeader, SectionCard } from "@/features/ui";
-import { apiPost, ApiError } from "@/lib/api";
+import { PageHeader, SectionCard, StatusChip } from "@/features/ui";
+import { apiGet, apiPost, ApiError } from "@/lib/api";
 import { resolveHomePath, useAuth } from "@/lib/auth";
 
 const NAV = [
@@ -16,13 +23,31 @@ const NAV = [
   { href: "/operator/domains", label: "Domains" },
 ];
 
+type DomainRow = {
+  id: string;
+  college_id: string;
+  college_name: string | null;
+  domain: string;
+  status: string;
+  dns_txt_token: string;
+  dns_verified_at: string | null;
+  created_at: string;
+};
+
 export default function OperatorDomainsPage() {
   const router = useRouter();
   const { user, loading } = useAuth();
-  const [domainId, setDomainId] = useState("");
+  const [rows, setRows] = useState<DomainRow[]>([]);
+  const [filter, setFilter] = useState("pending");
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [busyId, setBusyId] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    const q = filter ? `?status=${encodeURIComponent(filter)}` : "";
+    const data = await apiGet<DomainRow[]>(`/operator/domains${q}`);
+    setRows(data);
+  }, [filter]);
 
   useEffect(() => {
     if (loading) return;
@@ -32,21 +57,40 @@ export default function OperatorDomainsPage() {
     }
     if (!user.is_platform_operator) {
       router.replace(resolveHomePath(user));
+      return;
     }
-  }, [loading, user, router]);
+    void load().catch((err: unknown) => {
+      setError(err instanceof ApiError ? err.message : "Load failed.");
+    });
+  }, [loading, user, router, load]);
 
-  async function approve() {
+  async function approve(id: string) {
+    setBusyId(id);
     setError(null);
     setMessage(null);
-    setBusy(true);
     try {
-      await apiPost(`/operator/domains/${domainId.trim()}/approve`);
-      setMessage("Domain approved and marked active.");
-      setDomainId("");
+      await apiPost(`/operator/domains/${id}/approve`);
+      setMessage("Domain approved.");
+      await load();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Approve failed.");
     } finally {
-      setBusy(false);
+      setBusyId(null);
+    }
+  }
+
+  async function reject(id: string) {
+    setBusyId(id);
+    setError(null);
+    setMessage(null);
+    try {
+      await apiPost(`/operator/domains/${id}/reject`, { notes: "Rejected by operator" });
+      setMessage("Domain rejected.");
+      await load();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Reject failed.");
+    } finally {
+      setBusyId(null);
     }
   }
 
@@ -62,28 +106,93 @@ export default function OperatorDomainsPage() {
     >
       <PageHeader
         title="Domain approvals"
-        description="Paste a pending domain request ID from the college admin portal."
-      />
-      <SectionCard title="Approve domain request">
-        <Stack spacing={2} sx={{ maxWidth: 480 }}>
-          {error ? <Alert severity="error">{error}</Alert> : null}
-          {message ? <Alert severity="success">{message}</Alert> : null}
+        description="Pending domain requests from college admins. Approve after DNS TXT is set (required in production)."
+        actions={
           <TextField
-            label="Domain request ID"
-            value={domainId}
-            onChange={(e) => setDomainId(e.target.value)}
-            fullWidth
-            helperText="College admins see this ID after requesting a domain."
-          />
-          <Button
-            variant="contained"
-            onClick={() => void approve()}
-            disabled={!domainId.trim() || busy}
-            sx={{ alignSelf: "flex-start" }}
+            select
+            size="small"
+            label="Status"
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+            sx={{ minWidth: 140 }}
           >
-            {busy ? "Approving…" : "Approve domain"}
-          </Button>
-        </Stack>
+            <MenuItem value="pending">Pending</MenuItem>
+            <MenuItem value="active">Active</MenuItem>
+            <MenuItem value="rejected">Rejected</MenuItem>
+            <MenuItem value="">All</MenuItem>
+          </TextField>
+        }
+      />
+      {error ? (
+        <Alert severity="error" sx={{ mb: 2 }}>
+          {error}
+        </Alert>
+      ) : null}
+      {message ? (
+        <Alert severity="success" sx={{ mb: 2 }}>
+          {message}
+        </Alert>
+      ) : null}
+      <SectionCard title="Domain requests">
+        {rows.length === 0 ? (
+          <Alert severity="info">No domains for this filter.</Alert>
+        ) : (
+          <TableContainer>
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell>Requested</TableCell>
+                  <TableCell>College</TableCell>
+                  <TableCell>Domain</TableCell>
+                  <TableCell>TXT token</TableCell>
+                  <TableCell>Status</TableCell>
+                  <TableCell align="right">Actions</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {rows.map((r) => (
+                  <TableRow key={r.id} hover>
+                    <TableCell>
+                      {new Date(r.created_at).toLocaleString()}
+                    </TableCell>
+                    <TableCell>{r.college_name ?? r.college_id.slice(0, 8)}</TableCell>
+                    <TableCell>{r.domain}</TableCell>
+                    <TableCell sx={{ fontFamily: "monospace", fontSize: 12 }}>
+                      {r.dns_txt_token}
+                    </TableCell>
+                    <TableCell>
+                      <StatusChip status={r.status} />
+                    </TableCell>
+                    <TableCell align="right">
+                      {r.status === "pending" ? (
+                        <Stack direction="row" spacing={1} sx={{ justifyContent: "flex-end" }}>
+                          <Button
+                            size="small"
+                            variant="contained"
+                            disabled={busyId === r.id}
+                            onClick={() => void approve(r.id)}
+                          >
+                            Approve
+                          </Button>
+                          <Button
+                            size="small"
+                            color="error"
+                            disabled={busyId === r.id}
+                            onClick={() => void reject(r.id)}
+                          >
+                            Reject
+                          </Button>
+                        </Stack>
+                      ) : (
+                        "—"
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        )}
       </SectionCard>
     </PortalShell>
   );

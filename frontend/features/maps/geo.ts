@@ -1,10 +1,37 @@
 import { brand } from "@/theme/tokens";
-import type { MapLatLng, RoutePathItem, StopMarkerItem } from "@/components/maps";
+import type {
+  MapLatLng,
+  RoutePathItem,
+  StopMarkerItem,
+} from "@/components/maps/types";
 
 export const DEFAULT_MAP_CENTER: MapLatLng = { lat: 12.9716, lng: 77.5946 };
 
+/** Assumed average bus speed for approx duration labels (not live traffic). */
+const ASSUMED_BUS_KMH = 25;
+
 export function roundCoord(n: number): number {
   return Math.round(n * 1e6) / 1e6;
+}
+
+export function haversineMeters(
+  a: MapLatLng,
+  b: MapLatLng,
+): number {
+  const R = 6371000;
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const dLat = toRad(b.lat - a.lat);
+  const dLng = toRad(b.lng - a.lng);
+  const lat1 = toRad(a.lat);
+  const lat2 = toRad(b.lat);
+  const h =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.min(1, Math.sqrt(h)));
+}
+
+export function approxMinutesFromMeters(meters: number): number {
+  return (meters / 1000 / ASSUMED_BUS_KMH) * 60;
 }
 
 export function centerFromPoints(points: MapLatLng[]): MapLatLng {
@@ -24,14 +51,28 @@ export function routeColor(index: number): string {
 export function stopsToMarkers(
   stops: { stop_id: string; sequence: number; name: string; lat: number; lng: number }[],
 ): StopMarkerItem[] {
-  return stops.map((s) => ({
-    // Sequence in id: campus depot can appear twice (start + end) with the same stop_id.
-    id: `${s.stop_id}-${s.sequence}`,
-    sequence: s.sequence,
-    label: s.name,
-    lat: s.lat,
-    lng: s.lng,
-  }));
+  const ordered = [...stops].sort((a, b) => a.sequence - b.sequence);
+  return ordered.map((s, i) => {
+    const prev = i > 0 ? ordered[i - 1] : null;
+    const dist =
+      prev != null
+        ? haversineMeters(
+            { lat: prev.lat, lng: prev.lng },
+            { lat: s.lat, lng: s.lng },
+          )
+        : undefined;
+    return {
+      // Sequence in id: campus depot can appear twice (start + end) with the same stop_id.
+      id: `${s.stop_id}-${s.sequence}`,
+      sequence: s.sequence,
+      label: s.name,
+      lat: s.lat,
+      lng: s.lng,
+      approxDistanceM: dist != null ? Math.round(dist) : undefined,
+      approxDurationMin:
+        dist != null ? Math.round(approxMinutesFromMeters(dist)) : undefined,
+    };
+  });
 }
 
 export function routesToPolylines(

@@ -9,8 +9,14 @@ from app.core.config import settings
 logger = logging.getLogger(__name__)
 
 
+def dns_verify_is_enabled() -> bool:
+    if settings.dns_verify_enabled is not None:
+        return bool(settings.dns_verify_enabled)
+    return settings.app_env.lower() == "production"
+
+
 def dns_txt_contains(domain: str, expected_token: str) -> bool:
-    if not settings.dns_verify_enabled:
+    if not dns_verify_is_enabled():
         return True
 
     try:

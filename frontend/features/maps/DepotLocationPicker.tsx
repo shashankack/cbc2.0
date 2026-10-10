@@ -11,7 +11,7 @@ import {
   MapClickCapture,
   MapLegend,
   type MapLatLng,
-} from "@/components/maps";
+} from "@/components/maps/leaflet";
 import { depotIcon } from "@/components/maps/leafletIcons";
 import { DEFAULT_MAP_CENTER, roundCoord } from "./geo";
 import { searchPlaces, type PlaceHit } from "./searchPlaces";

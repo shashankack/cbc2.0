@@ -73,6 +73,29 @@ def request_domain(
     return row
 
 
+def list_domains(
+    db: Session, *, status: str | None = None
+) -> list[CollegeDomain]:
+    stmt = select(CollegeDomain).order_by(CollegeDomain.created_at.desc())
+    if status:
+        stmt = stmt.where(CollegeDomain.status == status)
+    return list(db.scalars(stmt).all())
+
+
+def serialize_domain(db: Session, domain: CollegeDomain) -> dict:
+    college = db.get(College, domain.college_id)
+    return {
+        "id": domain.id,
+        "college_id": domain.college_id,
+        "college_name": college.name if college else None,
+        "domain": domain.domain,
+        "status": domain.status,
+        "dns_txt_token": domain.dns_txt_token,
+        "dns_verified_at": domain.dns_verified_at,
+        "created_at": domain.created_at,
+    }
+
+
 def approve_domain(db: Session, domain_id: uuid.UUID) -> CollegeDomain:
     domain = db.get(CollegeDomain, domain_id)
     if domain is None:
@@ -106,6 +129,26 @@ def approve_domain(db: Session, domain_id: uuid.UUID) -> CollegeDomain:
 
     domain.status = DomainStatus.ACTIVE
     domain.dns_verified_at = utcnow()
+    db.commit()
+    db.refresh(domain)
+    return domain
+
+
+def reject_domain(
+    db: Session, domain_id: uuid.UUID, *, notes: str | None = None
+) -> CollegeDomain:
+    domain = db.get(CollegeDomain, domain_id)
+    if domain is None:
+        raise AppError("NOT_FOUND", "Domain request not found.", status_code=404)
+    if domain.status != DomainStatus.PENDING:
+        raise AppError(
+            "CONFLICT",
+            "Only pending domains can be rejected.",
+            status_code=409,
+        )
+    domain.status = DomainStatus.REJECTED
+    # notes not persisted on domain model — ignore or log
+    _ = notes
     db.commit()
     db.refresh(domain)
     return domain

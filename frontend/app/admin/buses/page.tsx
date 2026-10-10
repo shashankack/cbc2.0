@@ -141,7 +141,7 @@ export default function AdminBusesPage() {
       await load(collegeId);
       if (result.emergency_reallocation_id) {
         window.alert(
-          `Disruption proposal created for ${result.affected_count} students. Confirm it under Emergency.`,
+          `Disruption proposal created for ${result.affected_count} students. Open Admin → Disruptions to confirm reassignment.`,
         );
       } else {
         window.alert(result.note ?? "Bus marked unavailable.");

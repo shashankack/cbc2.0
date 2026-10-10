@@ -49,3 +49,18 @@ class DomainApproveOut(ORMModel):
     domain: str
     status: str
     dns_verified_at: datetime | None
+
+
+class DomainOut(ORMModel):
+    id: UUID
+    college_id: UUID
+    college_name: str | None = None
+    domain: str
+    status: str
+    dns_txt_token: str
+    dns_verified_at: datetime | None
+    created_at: datetime
+
+
+class DomainDecision(BaseModel):
+    notes: str | None = None

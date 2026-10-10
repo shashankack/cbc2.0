@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Alert from "@mui/material/Alert";
 import Button from "@mui/material/Button";
@@ -9,6 +9,7 @@ import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 import { BoardingScanPanel } from "@/components/trips";
 import { decodeBoardingQr } from "@/features/trips/boardingQr";
+import QrCameraScanner from "@/features/trips/QrCameraScanner";
 import PortalShell from "@/features/shell/PortalShell";
 import { PageHeader, SectionCard } from "@/features/ui";
 import { apiGet, apiPost, ApiError } from "@/lib/api";
@@ -54,21 +55,40 @@ export default function StudentBoardPage() {
       });
   }, [loading, user, collegeId, router]);
 
-  async function boardWith(tid: string, qrToken: string) {
-    if (!collegeId) return;
-    setStatus("scanning");
-    try {
-      await apiPost(`/colleges/${collegeId}/trips/${tid}/board`, {
-        qr_token: qrToken,
-      });
-      setStatus("success");
-      setMessage("Boarded successfully.");
-    } catch (err) {
-      const msg = err instanceof ApiError ? err.message : "Boarding failed.";
-      setStatus(msg.toLowerCase().includes("already") ? "duplicate" : "error");
-      setMessage(msg);
-    }
-  }
+  const boardWith = useCallback(
+    async (tid: string, qrToken: string) => {
+      if (!collegeId) return;
+      setStatus("scanning");
+      try {
+        await apiPost(`/colleges/${collegeId}/trips/${tid}/board`, {
+          qr_token: qrToken,
+        });
+        setStatus("success");
+        setMessage("Boarded successfully.");
+      } catch (err) {
+        const msg = err instanceof ApiError ? err.message : "Boarding failed.";
+        setStatus(msg.toLowerCase().includes("already") ? "duplicate" : "error");
+        setMessage(msg);
+      }
+    },
+    [collegeId],
+  );
+
+  const onCameraScan = useCallback(
+    (raw: string) => {
+      setPayload(raw);
+      const decoded = decodeBoardingQr(raw);
+      if (!decoded) {
+        setStatus("error");
+        setMessage("QR did not contain a valid CBC boarding payload.");
+        return;
+      }
+      setTripId(decoded.trip_id);
+      setToken(decoded.qr_token);
+      void boardWith(decoded.trip_id, decoded.qr_token);
+    },
+    [boardWith],
+  );
 
   async function board(event?: FormEvent) {
     event?.preventDefault();
@@ -93,36 +113,41 @@ export default function StudentBoardPage() {
     <PortalShell title="Student" description="QR boarding" nav={NAV}>
       <PageHeader
         title="Board with QR"
-        description="Scan or paste the driver’s boarding QR payload. Active trip is prefilled when your bus is running."
+        description="Scan the driver’s QR with your camera, or paste the CBC1: payload. Active trip is prefilled when your bus is running."
       />
       <SectionCard>
-        <Stack spacing={2.5} component="form" onSubmit={board} sx={{ maxWidth: 520 }}>
-          <TextField
-            label="Paste QR payload"
-            value={payload}
-            onChange={(e) => setPayload(e.target.value)}
-            placeholder="CBC1:<trip-id>|<token>"
-            fullWidth
-            helperText="From scanning the driver QR or copying the payload text under the image."
+        <Stack spacing={2.5} sx={{ maxWidth: 560 }}>
+          <QrCameraScanner
+            onScan={onCameraScan}
+            active={status !== "success"}
           />
-          <Typography variant="caption" color="text.secondary">
-            Or enter fields manually
-          </Typography>
-          <TextField
-            label="Trip ID"
-            value={tripId}
-            onChange={(e) => setTripId(e.target.value)}
-            fullWidth
-          />
-          <TextField
-            label="QR token"
-            value={token}
-            onChange={(e) => setToken(e.target.value)}
-            fullWidth
-          />
-          <Button type="submit" variant="contained" size="large">
-            Submit boarding
-          </Button>
+          <Stack spacing={2} component="form" onSubmit={board}>
+            <TextField
+              label="Paste QR payload"
+              value={payload}
+              onChange={(e) => setPayload(e.target.value)}
+              placeholder="CBC1:<trip-id>|<token>"
+              fullWidth
+            />
+            <Typography variant="caption" color="text.secondary">
+              Or enter fields manually
+            </Typography>
+            <TextField
+              label="Trip ID"
+              value={tripId}
+              onChange={(e) => setTripId(e.target.value)}
+              fullWidth
+            />
+            <TextField
+              label="QR token"
+              value={token}
+              onChange={(e) => setToken(e.target.value)}
+              fullWidth
+            />
+            <Button type="submit" variant="contained" size="large">
+              Submit boarding
+            </Button>
+          </Stack>
           <BoardingScanPanel
             status={status}
             message={message}

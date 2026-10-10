@@ -16,6 +16,7 @@ import {
 import PortalShell from "@/features/shell/PortalShell";
 import { EmptyState, PageHeader, SectionCard, StatusChip } from "@/features/ui";
 import { boardingQrImageUrl, encodeBoardingQr } from "@/features/trips/boardingQr";
+import { haversineMeters } from "@/features/maps";
 import { apiGet, apiPost, ApiError } from "@/lib/api";
 import { primaryCollegeId, resolveHomePath, useAuth } from "@/lib/auth";
 import { hasRole } from "@/lib/roles";
@@ -342,12 +343,27 @@ export default function DriverPage() {
             {itinerary.length > 0 ? (
               <SectionCard title="Ordered stops">
                 <OrderedStopList
-                  stops={itinerary.map((s) => ({
-                    id: `${s.stop_id}-${s.sequence}`,
-                    sequence: s.sequence,
-                    label: s.name,
-                    subtitle: `${s.lat.toFixed(4)}, ${s.lng.toFixed(4)}`,
-                  }))}
+                  stops={[...itinerary]
+                    .sort((a, b) => a.sequence - b.sequence)
+                    .map((s, i, ordered) => {
+                      const prev = i > 0 ? ordered[i - 1] : null;
+                      const dist =
+                        prev != null
+                          ? Math.round(
+                              haversineMeters(
+                                { lat: prev.lat, lng: prev.lng },
+                                { lat: s.lat, lng: s.lng },
+                              ),
+                            )
+                          : undefined;
+                      return {
+                        id: `${s.stop_id}-${s.sequence}`,
+                        sequence: s.sequence,
+                        label: s.name,
+                        subtitle: `${s.lat.toFixed(4)}, ${s.lng.toFixed(4)}`,
+                        approxDistanceM: dist,
+                      };
+                    })}
                 />
                 <Stack sx={{ mt: 2 }}>
                   <TripItineraryMap

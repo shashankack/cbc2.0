@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import ThemeRegistry from "@/theme/ThemeRegistry";
 import { AuthProvider } from "@/lib/auth";
-import { COLOR_MODE_KEY } from "@/theme/tokens";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -20,20 +19,6 @@ export const metadata: Metadata = {
   description: "Smarter Campus Transport, Better Seat Allocation.",
 };
 
-const themeInitScript = `
-(function(){
-  try {
-    var key = ${JSON.stringify(COLOR_MODE_KEY)};
-    var stored = localStorage.getItem(key);
-    var mode = stored === 'light' || stored === 'dark'
-      ? stored
-      : (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
-    document.documentElement.dataset.colorMode = mode;
-    document.documentElement.style.colorScheme = mode;
-  } catch (e) {}
-})();
-`;
-
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -45,9 +30,6 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable}`}
       suppressHydrationWarning
     >
-      <head>
-        <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
-      </head>
       <body>
         <ThemeRegistry>
           <AuthProvider>{children}</AuthProvider>

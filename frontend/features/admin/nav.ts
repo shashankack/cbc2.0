@@ -6,5 +6,6 @@ export const ADMIN_NAV = [
   { href: "/admin/planning", label: "Planning" },
   { href: "/admin/trips", label: "Trip logs" },
   { href: "/admin/analytics", label: "Attendance" },
+  { href: "/admin/disruptions", label: "Disruptions" },
   { href: "/admin/emergency", label: "Emergency" },
 ] as const;

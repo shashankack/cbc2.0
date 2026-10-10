@@ -18,9 +18,11 @@ from app.models.enums import (
     RouteStatus,
     TripStatus,
 )
+from app.models.campus import Campus
 from app.models.fleet import Bus
 from app.models.mixins import utcnow
 from app.models.planning import Allocation, Route, RouteStop
+from app.services.geo import haversine_m
 from app.models.student import Student
 from app.models.trip import (
     BoardingRecord,
@@ -693,7 +695,30 @@ def raise_distress(
             )
         ).all()
     )
-    available.sort(key=lambda b: (b.capacity < need, -b.capacity))
+    campus = db.get(Campus, trip.campus_id)
+    depot_lat = float(campus.lat) if campus and campus.lat is not None else lat
+    depot_lng = float(campus.lng) if campus and campus.lng is not None else lng
+
+    def _bus_distance_m(bus: Bus) -> float:
+        # Prefer last known ping on any trip for this bus; else campus depot.
+        peer = db.scalar(
+            select(Trip)
+            .where(
+                Trip.college_id == college_id,
+                Trip.bus_id == bus.id,
+                Trip.last_lat.is_not(None),
+                Trip.last_lng.is_not(None),
+            )
+            .order_by(Trip.last_location_at.desc())
+            .limit(1)
+        )
+        if peer and peer.last_lat is not None and peer.last_lng is not None:
+            return haversine_m(lat, lng, float(peer.last_lat), float(peer.last_lng))
+        return haversine_m(lat, lng, depot_lat, depot_lng)
+
+    available.sort(
+        key=lambda b: (_bus_distance_m(b), b.capacity < need, -b.capacity)
+    )
 
     chosen: list[dict] = []
     seats = 0
@@ -705,7 +730,7 @@ def raise_distress(
                 "bus_id": str(bus.id),
                 "registration_number": bus.registration_number,
                 "capacity": bus.capacity,
-                "distance_m_approx": None,
+                "distance_m_approx": round(_bus_distance_m(bus)),
             }
         )
         seats += bus.capacity
@@ -932,7 +957,49 @@ def propose_bus_disruption(
             )
         ).all()
     )
-    available.sort(key=lambda b: (b.capacity < need, -b.capacity))
+    campus = db.get(Campus, bus.campus_id) if bus.campus_id else None
+    depot_lat = float(campus.lat) if campus and campus.lat is not None else 0.0
+    depot_lng = float(campus.lng) if campus and campus.lng is not None else 0.0
+    # Prefer last known position of the disrupted bus; else campus depot.
+    trip_for_pos = db.scalar(
+        select(Trip)
+        .where(
+            Trip.college_id == college_id,
+            Trip.bus_id == bus.id,
+            Trip.last_lat.is_not(None),
+            Trip.last_lng.is_not(None),
+        )
+        .order_by(Trip.last_location_at.desc())
+        .limit(1)
+    )
+    ref_lat = (
+        float(trip_for_pos.last_lat)
+        if trip_for_pos and trip_for_pos.last_lat is not None
+        else depot_lat
+    )
+    ref_lng = (
+        float(trip_for_pos.last_lng)
+        if trip_for_pos and trip_for_pos.last_lng is not None
+        else depot_lng
+    )
+
+    def _alt_distance_m(alt: Bus) -> float:
+        peer = db.scalar(
+            select(Trip)
+            .where(
+                Trip.college_id == college_id,
+                Trip.bus_id == alt.id,
+                Trip.last_lat.is_not(None),
+                Trip.last_lng.is_not(None),
+            )
+            .order_by(Trip.last_location_at.desc())
+            .limit(1)
+        )
+        if peer and peer.last_lat is not None and peer.last_lng is not None:
+            return haversine_m(ref_lat, ref_lng, float(peer.last_lat), float(peer.last_lng))
+        return haversine_m(ref_lat, ref_lng, depot_lat, depot_lng)
+
+    available.sort(key=lambda b: (_alt_distance_m(b), b.capacity < need, -b.capacity))
     chosen: list[dict] = []
     seats = 0
     for alt in available:
@@ -943,6 +1010,7 @@ def propose_bus_disruption(
                 "bus_id": str(alt.id),
                 "registration_number": alt.registration_number,
                 "capacity": alt.capacity,
+                "distance_m_approx": round(_alt_distance_m(alt)),
             }
         )
         seats += alt.capacity
