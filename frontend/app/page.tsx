@@ -18,13 +18,21 @@ export default function Home() {
     >
       <Container maxWidth="md">
         <Stack spacing={2}>
-          <Stack direction="row" spacing={1.5} alignItems="center">
+          <Stack direction="row" spacing={1.5} sx={{ alignItems: "center" }}>
             <DirectionsBusIcon color="primary" fontSize="large" />
-            <Typography variant="h3" component="h1" fontWeight={700}>
+            <Typography
+              variant="h3"
+              component="h1"
+              sx={{ fontWeight: 700 }}
+            >
               College Bus System
             </Typography>
           </Stack>
-          <Typography variant="h6" color="text.secondary" maxWidth={560}>
+          <Typography
+            variant="h6"
+            color="text.secondary"
+            sx={{ maxWidth: 560 }}
+          >
             Multi-college route management, seat allocation, and QR boarding —
             scaffold ready for Stage 2+.
           </Typography>
