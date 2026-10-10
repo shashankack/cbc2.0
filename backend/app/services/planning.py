@@ -1,0 +1,427 @@
+"""Rule-based clustering, routing, bus assignment, confirm."""
+
+from __future__ import annotations
+
+import uuid
+from collections import defaultdict
+
+from sqlalchemy import select
+from sqlalchemy.orm import Session, selectinload
+
+from app.core.errors import AppError
+from app.models.campus import Campus, CampusSettings
+from app.models.enums import (
+    BusStatus,
+    PlanningItemStatus,
+    PlanningRunStatus,
+    RouteStatus,
+    StopSource,
+    StudentStatus,
+)
+from app.models.fleet import Bus
+from app.models.mixins import utcnow
+from app.models.planning import (
+    Allocation,
+    PlanningRun,
+    PlanningRunItem,
+    Route,
+    RouteStop,
+    Stop,
+)
+from app.models.student import Student, StudentImportBatch
+from app.services.geo import Point, centroid, dbscan, nearest_neighbor_order
+
+
+def _campus_settings(
+    db: Session, college_id: uuid.UUID, campus_id: uuid.UUID
+) -> CampusSettings:
+    settings = db.scalar(
+        select(CampusSettings).where(
+            CampusSettings.college_id == college_id,
+            CampusSettings.campus_id == campus_id,
+        )
+    )
+    if settings is None:
+        raise AppError(
+            "CONFLICT",
+            "Campus settings required before planning.",
+            status_code=409,
+        )
+    return settings
+
+
+def run_planning(
+    db: Session,
+    *,
+    college_id: uuid.UUID,
+    campus_id: uuid.UUID,
+    created_by_user_id: uuid.UUID,
+    import_batch_id: uuid.UUID | None = None,
+) -> PlanningRun:
+    campus = db.scalar(
+        select(Campus).where(Campus.id == campus_id, Campus.college_id == college_id)
+    )
+    if campus is None:
+        raise AppError("NOT_FOUND", "Campus not found.", status_code=404)
+    settings = _campus_settings(db, college_id, campus_id)
+
+    if import_batch_id is not None:
+        batch = db.scalar(
+            select(StudentImportBatch).where(
+                StudentImportBatch.id == import_batch_id,
+                StudentImportBatch.college_id == college_id,
+                StudentImportBatch.campus_id == campus_id,
+            )
+        )
+        if batch is None:
+            raise AppError("NOT_FOUND", "Import batch not found.", status_code=404)
+        students = list(
+            db.scalars(
+                select(Student).where(
+                    Student.college_id == college_id,
+                    Student.campus_id == campus_id,
+                    Student.import_batch_id == import_batch_id,
+                    Student.status.in_(
+                        [StudentStatus.IMPORTED, StudentStatus.NEEDS_ADMIN_REVIEW]
+                    ),
+                )
+            ).all()
+        )
+    else:
+        students = list(
+            db.scalars(
+                select(Student).where(
+                    Student.college_id == college_id,
+                    Student.campus_id == campus_id,
+                    Student.status.in_(
+                        [StudentStatus.IMPORTED, StudentStatus.NEEDS_ADMIN_REVIEW]
+                    ),
+                )
+            ).all()
+        )
+
+    if not students:
+        raise AppError(
+            "CONFLICT",
+            "No imported students available for planning.",
+            status_code=409,
+        )
+
+    buses = list(
+        db.scalars(
+            select(Bus).where(
+                Bus.college_id == college_id,
+                Bus.campus_id == campus_id,
+                Bus.status == BusStatus.AVAILABLE,
+            ).order_by(Bus.capacity.desc())
+        ).all()
+    )
+    if not buses:
+        raise AppError(
+            "CONFLICT",
+            "No available buses on this campus.",
+            status_code=409,
+        )
+
+    run = PlanningRun(
+        college_id=college_id,
+        campus_id=campus_id,
+        import_batch_id=import_batch_id,
+        created_by_user_id=created_by_user_id,
+        status=PlanningRunStatus.DRAFT,
+    )
+    db.add(run)
+    db.flush()
+
+    points = [
+        Point(id=s.id, lat=s.home_lat, lng=s.home_lng) for s in students
+    ]
+    clusters, noise = dbscan(
+        points,
+        eps_m=float(settings.cluster_eps_m),
+        min_samples=settings.cluster_min_samples,
+    )
+
+    student_by_id = {s.id: s for s in students}
+    stop_for_cluster: dict[int, Stop] = {}
+    members_by_stop: dict[uuid.UUID, list[uuid.UUID]] = {}
+
+    for cid, members in clusters.items():
+        lat, lng = centroid(members)
+        stop = Stop(
+            college_id=college_id,
+            campus_id=campus_id,
+            planning_run_id=run.id,
+            name=f"Cluster {cid + 1}",
+            lat=lat,
+            lng=lng,
+            source=StopSource.CLUSTER,
+        )
+        db.add(stop)
+        db.flush()
+        stop_for_cluster[cid] = stop
+        members_by_stop[stop.id] = [m.id for m in members]  # type: ignore[misc]
+
+    # Snap or review noise
+    review_ids: list[uuid.UUID] = []
+    for p in noise:
+        sid = p.id  # type: ignore[assignment]
+        from app.services.geo import haversine_m
+
+        best_stop = None
+        best_dist = None
+        for stop in stop_for_cluster.values():
+            dist = haversine_m(p.lat, p.lng, stop.lat, stop.lng)
+            if best_dist is None or dist < best_dist:
+                best_dist = dist
+                best_stop = stop
+        if best_stop is not None and best_dist is not None and best_dist <= settings.max_walk_to_stop_m:
+            members_by_stop.setdefault(best_stop.id, []).append(sid)
+            item_status = PlanningItemStatus.SNAPPED
+            stop_id = best_stop.id
+        else:
+            review_ids.append(sid)
+            item_status = PlanningItemStatus.NEEDS_ADMIN_REVIEW
+            stop_id = None
+            student_by_id[sid].status = StudentStatus.NEEDS_ADMIN_REVIEW
+
+        if stop_id is not None:
+            # item created later with route/bus
+            pass
+        db.add(
+            PlanningRunItem(
+                college_id=college_id,
+                planning_run_id=run.id,
+                student_id=sid,
+                stop_id=stop_id,
+                route_id=None,
+                bus_id=None,
+                status=item_status,
+            )
+        )
+
+    # Items for clustered members (not noise)
+    noise_ids = {p.id for p in noise}
+    for cid, members in clusters.items():
+        stop = stop_for_cluster[cid]
+        for m in members:
+            if m.id in noise_ids:
+                continue
+            db.add(
+                PlanningRunItem(
+                    college_id=college_id,
+                    planning_run_id=run.id,
+                    student_id=m.id,  # type: ignore[arg-type]
+                    stop_id=stop.id,
+                    route_id=None,
+                    bus_id=None,
+                    status=PlanningItemStatus.PROPOSED,
+                )
+            )
+
+    db.flush()
+
+    # Build routes: each stop with enough students becomes a route (or merge small ones later)
+    stop_points = [
+        Point(id=s.id, lat=s.lat, lng=s.lng) for s in stop_for_cluster.values()
+    ]
+    ordered_stops = nearest_neighbor_order(stop_points)
+
+    # Partition ordered stops into routes by min_students_per_route capacity packing
+    # Simple policy: one route per stop if headcount >= min; else leave students on review already handled
+    bus_iter = list(buses)
+    bus_idx = 0
+
+    for seq_base, sp in enumerate(ordered_stops):
+        stop_id = sp.id  # type: ignore[assignment]
+        member_ids = members_by_stop.get(stop_id, [])
+        if len(member_ids) < settings.min_students_per_route:
+            # Mark those items as needs review if too small for a route
+            items = db.scalars(
+                select(PlanningRunItem).where(
+                    PlanningRunItem.planning_run_id == run.id,
+                    PlanningRunItem.stop_id == stop_id,
+                )
+            ).all()
+            for item in items:
+                if item.status != PlanningItemStatus.NEEDS_ADMIN_REVIEW:
+                    item.status = PlanningItemStatus.NEEDS_ADMIN_REVIEW
+                    student_by_id[item.student_id].status = StudentStatus.NEEDS_ADMIN_REVIEW
+            continue
+
+        if bus_idx >= len(bus_iter):
+            raise AppError(
+                "CONFLICT",
+                "Not enough available buses for proposed routes.",
+                status_code=409,
+            )
+
+        # May need multiple buses if headcount > capacity
+        remaining = member_ids[:]
+        route_num = 1
+        while remaining:
+            if bus_idx >= len(bus_iter):
+                raise AppError(
+                    "CONFLICT",
+                    "Not enough available buses for proposed routes.",
+                    status_code=409,
+                )
+            bus = bus_iter[bus_idx]
+            bus_idx += 1
+            chunk = remaining[: bus.capacity]
+            remaining = remaining[bus.capacity :]
+
+            route = Route(
+                college_id=college_id,
+                campus_id=campus_id,
+                planning_run_id=run.id,
+                name=f"Route {seq_base + 1}-{route_num}",
+                status=RouteStatus.DRAFT,
+            )
+            db.add(route)
+            db.flush()
+            db.add(
+                RouteStop(
+                    college_id=college_id,
+                    route_id=route.id,
+                    stop_id=stop_id,
+                    sequence=1,
+                )
+            )
+            for sid in chunk:
+                item = db.scalar(
+                    select(PlanningRunItem).where(
+                        PlanningRunItem.planning_run_id == run.id,
+                        PlanningRunItem.student_id == sid,
+                    )
+                )
+                if item is None:
+                    continue
+                item.route_id = route.id
+                item.bus_id = bus.id
+                if item.status != PlanningItemStatus.NEEDS_ADMIN_REVIEW:
+                    item.status = (
+                        PlanningItemStatus.SNAPPED
+                        if item.status == PlanningItemStatus.SNAPPED
+                        else PlanningItemStatus.PROPOSED
+                    )
+                    student_by_id[sid].status = StudentStatus.ALLOCATED
+            route_num += 1
+
+    run.status = PlanningRunStatus.PROPOSED
+    db.commit()
+    db.refresh(run)
+    return get_planning_run(db, college_id, run.id)
+
+
+def get_planning_run(
+    db: Session, college_id: uuid.UUID, run_id: uuid.UUID
+) -> PlanningRun:
+    run = db.scalar(
+        select(PlanningRun)
+        .where(PlanningRun.id == run_id, PlanningRun.college_id == college_id)
+        .options(
+            selectinload(PlanningRun.stops),
+            selectinload(PlanningRun.routes).selectinload(Route.route_stops).selectinload(RouteStop.stop),
+            selectinload(PlanningRun.items),
+        )
+    )
+    if run is None:
+        raise AppError("NOT_FOUND", "Planning run not found.", status_code=404)
+    return run
+
+
+def list_planning_runs(db: Session, college_id: uuid.UUID) -> list[PlanningRun]:
+    return list(
+        db.scalars(
+            select(PlanningRun)
+            .where(PlanningRun.college_id == college_id)
+            .order_by(PlanningRun.created_at.desc())
+        ).all()
+    )
+
+
+def confirm_planning_run(
+    db: Session, college_id: uuid.UUID, run_id: uuid.UUID
+) -> PlanningRun:
+    run = get_planning_run(db, college_id, run_id)
+    if run.status != PlanningRunStatus.PROPOSED:
+        raise AppError(
+            "CONFLICT",
+            "Only proposed planning runs can be confirmed.",
+            status_code=409,
+        )
+
+    confirmable = [
+        i
+        for i in run.items
+        if i.status in {PlanningItemStatus.PROPOSED, PlanningItemStatus.SNAPPED}
+        and i.stop_id
+        and i.route_id
+        and i.bus_id
+    ]
+    if not confirmable:
+        raise AppError(
+            "CONFLICT",
+            "No confirmable student assignments in this planning run.",
+            status_code=409,
+        )
+
+    # Capacity check per bus
+    by_bus: dict[uuid.UUID, list[PlanningRunItem]] = defaultdict(list)
+    for item in confirmable:
+        assert item.bus_id is not None
+        by_bus[item.bus_id].append(item)
+
+    for bus_id, items in by_bus.items():
+        bus = db.get(Bus, bus_id)
+        if bus is None or bus.college_id != college_id:
+            raise AppError("CONFLICT", "Assigned bus missing.", status_code=409)
+        if bus.status != BusStatus.AVAILABLE:
+            raise AppError(
+                "CONFLICT",
+                f"Bus {bus.registration_number} is not available.",
+                status_code=409,
+            )
+        if len(items) > bus.capacity:
+            raise AppError(
+                "CONFLICT",
+                f"Bus {bus.registration_number} over capacity.",
+                status_code=409,
+            )
+
+    for item in confirmable:
+        existing = db.scalar(
+            select(Allocation).where(
+                Allocation.college_id == college_id,
+                Allocation.student_id == item.student_id,
+            )
+        )
+        if existing is not None:
+            raise AppError(
+                "CONFLICT",
+                "Student already has a locked allocation.",
+                status_code=409,
+            )
+        db.add(
+            Allocation(
+                college_id=college_id,
+                planning_run_id=run.id,
+                student_id=item.student_id,
+                stop_id=item.stop_id,  # type: ignore[arg-type]
+                route_id=item.route_id,  # type: ignore[arg-type]
+                bus_id=item.bus_id,  # type: ignore[arg-type]
+            )
+        )
+        item.status = PlanningItemStatus.CONFIRMED
+        student = db.get(Student, item.student_id)
+        if student is not None:
+            student.status = StudentStatus.LOCKED
+
+    for route in run.routes:
+        route.status = RouteStatus.CONFIRMED
+
+    run.status = PlanningRunStatus.CONFIRMED
+    run.confirmed_at = utcnow()
+    db.commit()
+    return get_planning_run(db, college_id, run.id)

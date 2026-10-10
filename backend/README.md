@@ -1,30 +1,39 @@
-# Backend (FastAPI)
+# Backend
 
-Core API for CBC 2.0. No ML service.
+FastAPI + SQLAlchemy + Alembic + PostgreSQL.
 
-## Run
+## Local run
 
 ```powershell
+# From repo root — start Postgres
+docker compose up -d
+
 cd backend
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
-copy .env.example .env   # edit DATABASE_URL
+copy .env.example .env
+alembic upgrade head
 uvicorn app.main:app --reload --port 8000
 ```
 
-- Health: http://localhost:8000/api/v1/health  
-- Ready (DB): http://localhost:8000/api/v1/ready  
-- OpenAPI: http://localhost:8000/docs  
+- Health: http://localhost:8000/api/v1/health
+- Ready: http://localhost:8000/api/v1/ready
+- OpenAPI: http://localhost:8000/docs
 
-## Layout
+On Windows, prefer `postgresql+pg8000://…` if App Control blocks `psycopg` DLLs.
 
-```text
-app/
-  api/v1/     route handlers
-  core/       settings, errors
-  db/         engine, session, Base
-  models/     SQLAlchemy models (Stage 3+)
-  schemas/    Pydantic schemas
-  services/   business logic
+## Tests
+
+```powershell
+pytest -q
 ```
+
+## Implemented
+
+- Tenant onboarding + OTP sessions
+- Buses, Excel/CSV student import
+- DBSCAN clustering planning + confirm (locked allocations)
+- Trips: start/end, QR boarding, driver GPS, distress emergency plans
+
+See `docs/api/API_CONTRACT.md`.

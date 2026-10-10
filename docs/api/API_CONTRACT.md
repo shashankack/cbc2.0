@@ -1,14 +1,15 @@
-# API contract (draft)
+# API contract
 
 ## Conventions
 
 - Prefix: `/api/v1`
 - JSON request/response payloads
-- `snake_case` field names
-- ISO 8601 timestamps with timezone
-- Explicit status enums
-- Pydantic validation on the backend
-- FastAPI OpenAPI documentation
+- Field names: `snake_case`
+- IDs: UUID strings
+- Timestamps: ISO 8601 with timezone
+- Status fields: explicit enums
+- Auth: HTTP-only session cookie (`cbc_session`)
+- Never trust client-supplied `college_id` / role / student_id / driver_id
 
 ## Error shape
 
@@ -21,13 +22,82 @@
 }
 ```
 
-## Authorization rules
+| Code | HTTP | Meaning |
+|------|------|---------|
+| `VALIDATION_ERROR` | 422 | Invalid body/query invalid |
+| `UNAUTHORIZED` | 401 | Not authenticated |
+| `FORBIDDEN` | 403 | Authenticated but not allowed |
+| `NOT_FOUND` | 404 | Resource missing or outside tenant |
+| `CONFLICT` | 409 | Uniqueness / state conflict |
+| `DATABASE_UNAVAILABLE` | 503 | DB not reachable |
 
-- Never trust client-supplied `college_id`, role, student ID, driver ID, allocation status, or capacity as authorization proof.
-- Derive actor identity and role from the authenticated server-side session/token.
-- Check tenant scope on every tenant-owned read and write.
-- Do not return OTP hashes, QR token hashes, or internal credentials.
+## Implemented
 
-## Endpoint inventory
+### Health / auth / tenancy
 
-Filled from Stage 4 onward. Health check (Stage 2): `GET /api/v1/health`.
+| Method | Path | Auth |
+|--------|------|------|
+| GET | `/health` | none |
+| GET | `/ready` | none |
+| POST | `/auth/otp/request` | public |
+| POST | `/auth/otp/verify` | public → sets cookie |
+| POST | `/auth/logout` | session |
+| GET | `/auth/me` | session |
+| POST | `/operator/college-applications` | public |
+| GET | `/operator/college-applications` | operator |
+| POST | `/operator/college-applications/{id}/approve` | operator |
+| POST | `/operator/college-applications/{id}/reject` | operator |
+| POST | `/colleges/{college_id}/domains` | college_admin |
+| POST | `/operator/domains/{id}/approve` | operator |
+| GET/POST | `/colleges/{college_id}/campuses` | college_admin |
+| PUT | `/colleges/{college_id}/campuses/{campus_id}/settings` | college_admin |
+
+### Fleet / import / planning
+
+| Method | Path | Auth | Purpose |
+|--------|------|------|---------|
+| GET/POST | `/colleges/{college_id}/buses` | college_admin | List / create buses |
+| PATCH | `/colleges/{college_id}/buses/{bus_id}` | college_admin | Status / capacity / driver |
+| POST | `/colleges/{college_id}/imports/students` | college_admin | Excel/CSV upload (`multipart`: `campus_id`, `file`) |
+| GET | `/colleges/{college_id}/imports/students/{batch_id}` | college_admin | Import batch status |
+| GET | `/colleges/{college_id}/students` | college_admin | List students |
+| POST | `/colleges/{college_id}/planning-runs` | college_admin | Cluster + route + bus proposal |
+| GET | `/colleges/{college_id}/planning-runs` | college_admin | List runs |
+| GET | `/colleges/{college_id}/planning-runs/{run_id}` | college_admin | Run detail |
+| POST | `/colleges/{college_id}/planning-runs/{run_id}/confirm` | college_admin | Lock allocations |
+| GET | `/colleges/{college_id}/me/allocation` | student/admin | Locked assignment (+ stop/route/bus labels) |
+
+### Trips / QR / location / distress
+
+| Method | Path | Auth | Purpose |
+|--------|------|------|---------|
+| GET | `/colleges/{college_id}/trips` | driver or college_admin | List trips (`?status=` optional; drivers see own only) |
+| POST | `/colleges/{college_id}/trips` | driver or college_admin | Create scheduled trip |
+| POST | `/colleges/{college_id}/trips/{trip_id}/start` | driver | Start session + QR + itinerary |
+| POST | `/colleges/{college_id}/trips/{trip_id}/qr/refresh` | driver | New QR token |
+| POST | `/colleges/{college_id}/trips/{trip_id}/end` | driver | End session (invalidates QR) |
+| GET | `/colleges/{college_id}/trips/{trip_id}/itinerary` | driver/admin/student | Ordered stops |
+| POST | `/colleges/{college_id}/trips/{trip_id}/location` | driver | GPS ping (active only) |
+| GET | `/colleges/{college_id}/trips/{trip_id}/location` | driver/admin/student | Last known position |
+| POST | `/colleges/{college_id}/trips/{trip_id}/board` | student | Scan QR → attendance |
+| POST | `/colleges/{college_id}/trips/{trip_id}/distress` | driver | Distress + emergency plan |
+| POST | `/colleges/{college_id}/emergency-reallocations/{id}/confirm` | college_admin | Confirm emergency plan |
+
+### Local notes
+
+- Bootstrap operator: `BOOTSTRAP_OPERATOR_EMAIL` (default `operator@example.com`).
+- Dev OTP codes logged at WARNING on the API process.
+- `DNS_VERIFY_ENABLED=false` skips live DNS TXT checks.
+- Import requires active domain + campus settings.
+- Planning uses Haversine DBSCAN + nearest-neighbour route order + capacity packing (no ML / no traffic).
+
+## Out of scope
+
+- No ML / demand endpoints
+- No GraphQL
+
+## Related docs
+
+- Features: [../requirements/FEATURES.md](../requirements/FEATURES.md)
+- Data model: [../architecture/DATA_MODEL.md](../architecture/DATA_MODEL.md)
+- Clustering: [../architecture/ROUTING_AND_CLUSTERING.md](../architecture/ROUTING_AND_CLUSTERING.md)
