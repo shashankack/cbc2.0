@@ -1,7 +1,12 @@
 """Seed PES University / Ring Road Campus for manual import + planning demos.
 
-Creates (or updates) college, campus, domain, settings, buses, and driver.
+Creates (or updates) college, campus, domain, settings, buses, and drivers.
 Does NOT import students or run planning — upload the CSV yourself.
+
+Demo sizing (after import + planning on RING):
+  - 24 students in 6 corridor clusters (4 each)
+  - 3 available buses @ capacity 8
+  - packing yields 3 multi-stop routes (2 stops × 8 seats each)
 
 Usage (from backend/, venv active):
   python scripts/seed_demo_pes.py
@@ -61,7 +66,17 @@ CAMPUS_NAME = "Ring Road Campus"
 CAMPUS_CODE = "RING"
 DOMAIN = "pes.edu"
 ADMIN_EMAIL = "admin@pes.edu"
-DRIVER_EMAIL = "driver@pes.edu"
+DRIVER_EMAILS = (
+    ("driver@pes.edu", "PES Driver 1"),
+    ("driver2@pes.edu", "PES Driver 2"),
+    ("driver3@pes.edu", "PES Driver 3"),
+)
+# Capacity 8 + 6 clusters of 4 → three packed routes of two stops each.
+BUS_SPECS = (
+    ("KA01PE1001", 8, "driver@pes.edu"),
+    ("KA01PE1002", 8, "driver2@pes.edu"),
+    ("KA01PE1003", 8, "driver3@pes.edu"),
+)
 
 FIXTURE_CSV = Path(__file__).resolve().parent / "fixtures" / "pes_ring_road_students.csv"
 
@@ -260,25 +275,28 @@ def main() -> None:
             user_id=admin.id,
             role=MembershipRole.COLLEGE_ADMIN,
         )
-        driver = get_or_create_user(db, DRIVER_EMAIL, "PES Driver")
-        ensure_membership(
-            db,
-            college_id=college.id,
-            user_id=driver.id,
-            role=MembershipRole.DRIVER,
-        )
+        drivers_by_email: dict[str, User] = {}
+        for driver_email, driver_name in DRIVER_EMAILS:
+            driver = get_or_create_user(db, driver_email, driver_name)
+            ensure_membership(
+                db,
+                college_id=college.id,
+                user_id=driver.id,
+                role=MembershipRole.DRIVER,
+            )
+            drivers_by_email[driver_email] = driver
         db.commit()
 
         _wipe_college_ops(db, college.id)
 
-        for reg in ("KA01PE1001", "KA01PE1002"):
+        for reg, capacity, driver_email in BUS_SPECS:
             bus = Bus(
                 college_id=college.id,
                 campus_id=campus.id,
                 registration_number=reg,
-                capacity=40,
+                capacity=capacity,
                 status=BusStatus.AVAILABLE,
-                driver_user_id=driver.id if reg.endswith("1001") else None,
+                driver_user_id=drivers_by_email[driver_email].id,
             )
             db.add(bus)
         db.commit()
@@ -294,17 +312,22 @@ def main() -> None:
         r = client.get(f"/api/v1/colleges/{college_id}/campuses")
         assert r.status_code == 200, r.text
 
+    bus_label = ", ".join(
+        f"{reg} (cap {cap}, {drv})" for reg, cap, drv in BUS_SPECS
+    )
     print("PES University seed ready (no students imported).")
     print()
     print(f"  College:  {COLLEGE_NAME}  ({college_id})")
     print(f"  Campus:   {CAMPUS_NAME} [{CAMPUS_CODE}]  ({campus_id})")
     print(f"  Domain:   {DOMAIN} (active)")
     print(f"  Admin:    {ADMIN_EMAIL}")
-    print(f"  Driver:   {DRIVER_EMAIL}")
-    print(f"  Buses:    KA01PE1001 (driver assigned), KA01PE1002")
+    print(f"  Drivers:  {', '.join(e for e, _ in DRIVER_EMAILS)}")
+    print(f"  Buses:    {bus_label}")
+    print("  Expected after import+plan: 3 routes (2 stops each)")
     print()
     print("Manual import CSV:")
     print(f"  {FIXTURE_CSV}")
+    print(f"  ({sum(1 for _ in FIXTURE_CSV.open(encoding='utf-8')) - 1} students, 6 corridor clusters)")
     print()
     print("Steps:")
     print(f"  1. Login as {ADMIN_EMAIL} (OTP in uvicorn log)")
@@ -312,7 +335,7 @@ def main() -> None:
     print(f"  3. Select campus {CAMPUS_CODE} ({campus_id})")
     print("  4. Upload the CSV above")
     print("  5. Continue to Planning (or Admin -> Planning)")
-    print("  6. Run clustering / assignment, then Confirm")
+    print("  6. Run clustering / assignment (expect 3 routes), then Confirm")
 
 
 if __name__ == "__main__":
