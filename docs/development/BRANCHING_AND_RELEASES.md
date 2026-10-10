@@ -5,6 +5,7 @@
 | Branch | Purpose |
 |--------|---------|
 | `main` | Integration (PR only) |
+| `dev` | Owner day-to-day implementation; PR into `main` when ready |
 | `production` | Reserved for future deploy (not created yet) |
 | `feat/ui-design-system` | UI/UX — `frontend/components/` only |
 | `feat/demo-qa-docs` | Demo data, tests, docs, slides |

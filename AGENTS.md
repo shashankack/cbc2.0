@@ -6,15 +6,16 @@
 
 1. Prefer providing exact file paths and complete proposed contents when in planning mode.
 2. When the owner asks to create, scaffold, or apply changes, follow that instruction for the agreed stage only.
-3. Do not commit, push, merge, or force-push unless the owner explicitly requests it.
-4. Never claim that a command, test, build, migration or deployment succeeded unless results are available.
-5. Work in small stages. Do not dump an entire application in one response.
-6. End each stage with a verification checklist when handing off to the owner.
-7. When asked to implement a feature, first list the files that would change and why, then implement only the agreed stage.
-8. If a requested change affects an API contract, schema, shared component or dependency, call it out before writing code.
-9. Do not silently change the agreed stack, scope, endpoint names, field names, enums, role names or branch strategy.
-10. If requirements conflict or are missing, identify the conflict and ask one concise clarification rather than inventing behavior.
-11. Do not include fake credentials, real secrets or actual personal data in examples.
+3. Do **not** create git commits unless the owner explicitly asks. Prefer giving the owner a commit message and commands so they commit locally (no Cursor/`Co-authored-by` trailers).
+4. Do not push, merge, or force-push unless the owner explicitly requests it.
+5. Never claim that a command, test, build, migration or deployment succeeded unless results are available.
+6. Work in small stages. Do not dump an entire application in one response.
+7. End each stage with a verification checklist when handing off to the owner.
+8. When asked to implement a feature, first list the files that would change and why, then implement only the agreed stage.
+9. If a requested change affects an API contract, schema, shared component or dependency, call it out before writing code.
+10. Do not silently change the agreed stack, scope, endpoint names, field names, enums, role names or branch strategy.
+11. If requirements conflict or are missing, identify the conflict and ask one concise clarification rather than inventing behavior.
+12. Do not include fake credentials, real secrets or actual personal data in examples.
 
 ## Cross-agent synchronization
 

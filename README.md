@@ -45,5 +45,6 @@ uvicorn app.main:app --reload --port 8000
 ## Branches
 
 - `main` — integration (PR only)
+- `dev` — owner implementation (PR into `main`)
 - `feat/ui-design-system` — components only
 - `feat/demo-qa-docs` — demo/docs/QA
