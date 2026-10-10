@@ -97,8 +97,8 @@ export default function QrCameraScanner({
   if (supported === false) {
     return (
       <Alert severity="info">
-        Live camera QR scan is not supported in this browser. Paste the CBC1:
-        payload from the driver QR instead.
+        Camera QR scan needs a Chromium browser (Chrome or Edge). On this
+        browser, paste the CBC1: payload from the driver screen below.
       </Alert>
     );
   }

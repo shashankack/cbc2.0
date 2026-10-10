@@ -113,10 +113,14 @@ export default function StudentBoardPage() {
     <PortalShell title="Student" description="QR boarding" nav={NAV}>
       <PageHeader
         title="Board with QR"
-        description="Scan the driver’s QR with your camera, or paste the CBC1: payload. Active trip is prefilled when your bus is running."
+        description="Chromium browsers can scan the driver’s QR with the camera. Elsewhere (or if the camera is blocked), paste the CBC1: payload. Active trip is prefilled when your bus is running."
       />
       <SectionCard>
         <Stack spacing={2.5} sx={{ maxWidth: 560 }}>
+          <Alert severity="info">
+            Live camera scan needs Chrome/Edge (BarcodeDetector). Firefox/Safari:
+            copy the CBC1: text from the driver screen and paste below.
+          </Alert>
           <QrCameraScanner
             onScan={onCameraScan}
             active={status !== "success"}
@@ -127,10 +131,11 @@ export default function StudentBoardPage() {
               value={payload}
               onChange={(e) => setPayload(e.target.value)}
               placeholder="CBC1:<trip-id>|<token>"
+              helperText="Works on every browser — preferred fallback when camera scan is unavailable."
               fullWidth
             />
             <Typography variant="caption" color="text.secondary">
-              Or enter fields manually
+              Or enter trip ID + token manually
             </Typography>
             <TextField
               label="Trip ID"
