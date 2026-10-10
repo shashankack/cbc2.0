@@ -1,9 +1,12 @@
+"use client";
+
 import DirectionsBusIcon from "@mui/icons-material/DirectionsBus";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import Container from "@mui/material/Container";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
+import ColorModeToggle from "@/theme/ColorModeToggle";
 
 export default function Home() {
   return (
@@ -13,25 +16,36 @@ export default function Home() {
         minHeight: "100vh",
         display: "flex",
         alignItems: "center",
-        background:
-          "linear-gradient(160deg, #E8EEF7 0%, #F5F7FA 45%, #F0E6DE 100%)",
+        position: "relative",
+        background: (theme) =>
+          theme.palette.mode === "light"
+            ? "linear-gradient(155deg, #E8EEF7 0%, #F4F6F9 48%, #E6F4F1 100%)"
+            : "linear-gradient(155deg, #0B1220 0%, #121A29 55%, #0F2430 100%)",
       }}
     >
+      <Box sx={{ position: "absolute", top: 16, right: 16 }}>
+        <ColorModeToggle />
+      </Box>
       <Container maxWidth="md">
         <Stack spacing={3}>
           <Stack direction="row" spacing={1.5} sx={{ alignItems: "center" }}>
-            <DirectionsBusIcon color="primary" fontSize="large" />
-            <Typography variant="h3" component="h1" sx={{ fontWeight: 700 }}>
-              College Bus System
-            </Typography>
+            <DirectionsBusIcon color="secondary" sx={{ fontSize: 44 }} />
+            <Box>
+              <Typography variant="h3" component="h1" sx={{ fontWeight: 700 }}>
+                UniTransit
+              </Typography>
+              <Typography variant="subtitle1" color="text.secondary">
+                Smarter Campus Transport, Better Seat Allocation.
+              </Typography>
+            </Box>
           </Stack>
           <Typography
             variant="h6"
             color="text.secondary"
-            sx={{ maxWidth: 560 }}
+            sx={{ maxWidth: 560, fontWeight: 400 }}
           >
-            Excel planning, locked pickups, QR boarding, and live driver
-            tracking — without heavy ML.
+            Excel-driven planning, locked pickups, QR boarding, and live driver
+            position while a trip is active.
           </Typography>
           <Stack direction="row" spacing={2}>
             <Button href="/login" variant="contained" size="large">
