@@ -68,10 +68,10 @@ export default function AdminAnalyticsPage() {
   }
 
   return (
-    <PortalShell title="College admin" description="Boarding analytics" nav={nav}>
+    <PortalShell title="College admin" description="Who got on the bus" nav={nav}>
       <PageHeader
-        title="Attendance analytics"
-        description="Rule-based boarded vs assigned counts per trip (not ML / not traffic)."
+        title="Who boarded"
+        description="Simple counts: how many students were assigned to each trip versus how many checked in with the driver’s QR."
       />
       {error ? (
         <Alert severity="error" sx={{ mb: 2 }}>

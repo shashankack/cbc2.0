@@ -94,18 +94,18 @@ export default function DepotLocationPicker({
         renderInput={(params) => (
           <TextField
             {...params}
-            label="Search place or address"
+            label="Search for your campus"
             placeholder="e.g. PES University"
             helperText={
               searchError ??
-              "OpenStreetMap search (India / Bangalore biased). Select a result, then Apply & save."
+              "Type a place name, pick a result, then save the campus pin."
             }
             error={Boolean(searchError)}
           />
         )}
       />
       <Typography variant="caption" color="text.secondary">
-        Or click the map to fine-tune the pin.
+        Or tap the map to move the pin.
       </Typography>
       <MapCanvas
         center={center}
@@ -114,7 +114,7 @@ export default function DepotLocationPicker({
         showApproxDisclaimer={false}
         legend={
           <MapLegend
-            items={[{ id: "depot", color: "#0B3D91", label: "Campus depot" }]}
+            items={[{ id: "depot", color: "#0B3D91", label: "Campus pin" }]}
           />
         }
       >

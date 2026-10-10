@@ -97,8 +97,8 @@ export default function QrCameraScanner({
   if (supported === false) {
     return (
       <Alert severity="info">
-        Camera QR scan needs a Chromium browser (Chrome or Edge). On this
-        browser, paste the CBC1: payload from the driver screen below.
+        This browser can’t scan QR codes with the camera. Use Chrome or Edge, or
+        paste the boarding code from the driver’s screen below.
       </Alert>
     );
   }

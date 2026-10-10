@@ -19,7 +19,6 @@ import Typography from "@mui/material/Typography";
 import useMediaQuery from "@mui/material/useMediaQuery";
 import { useTheme } from "@mui/material/styles";
 import { useAuth } from "@/lib/auth";
-import ColorModeToggle from "@/theme/ColorModeToggle";
 
 export type NavItem = {
   href: string;
@@ -54,11 +53,29 @@ export default function PortalShell({
   const navList = (
     <Box sx={{ display: "flex", flexDirection: "column", height: "100%" }}>
       <Toolbar sx={{ gap: 1.25, px: 2 }}>
-        <DirectionsBusIcon color="secondary" />
+        <Box
+          sx={{
+            width: 34,
+            height: 34,
+            borderRadius: 2,
+            flexShrink: 0,
+            bgcolor: "rgba(20, 184, 166, 0.14)",
+            border: "1px solid rgba(20, 184, 166, 0.32)",
+            color: "primary.main",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <DirectionsBusIcon fontSize="small" />
+        </Box>
         {(!collapsed || isMobile) && (
           <Box sx={{ minWidth: 0 }}>
-            <Typography variant="subtitle1" sx={{ fontWeight: 700, lineHeight: 1.2 }}>
-              UniTransit
+            <Typography variant="subtitle1" sx={{ fontWeight: 750, lineHeight: 1.2 }}>
+              Uni
+              <Box component="span" sx={{ color: "primary.main" }}>
+                Transit
+              </Box>
             </Typography>
             <Typography variant="caption" color="text.secondary" noWrap>
               {title}
@@ -70,7 +87,8 @@ export default function PortalShell({
       <List sx={{ px: 1, py: 1.5, flexGrow: 1 }}>
         {nav.map((item) => {
           const selected =
-            pathname === item.href || pathname.startsWith(`${item.href}/`);
+            pathname === item.href ||
+            (item.href !== "/admin" && pathname.startsWith(`${item.href}/`));
           return (
             <ListItemButton
               key={item.href}
@@ -79,7 +97,7 @@ export default function PortalShell({
               selected={selected}
               onClick={() => setMobileOpen(false)}
               sx={{
-                borderRadius: 1,
+                borderRadius: 1.25,
                 mb: 0.5,
                 justifyContent: collapsed && !isMobile ? "center" : "flex-start",
                 px: collapsed && !isMobile ? 1 : 2,
@@ -91,7 +109,8 @@ export default function PortalShell({
                   primary: {
                     noWrap: true,
                     sx: {
-                      fontWeight: selected ? 650 : 500,
+                      fontWeight: selected ? 700 : 500,
+                      color: selected ? "primary.main" : "text.primary",
                       display: collapsed && !isMobile ? "none" : "block",
                     },
                   },
@@ -156,7 +175,6 @@ export default function PortalShell({
               </Typography>
             ) : null}
           </Box>
-          <ColorModeToggle />
           <Typography
             variant="body2"
             color="text.secondary"

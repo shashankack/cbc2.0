@@ -117,10 +117,10 @@ export default function AdminDriversPage() {
   }
 
   return (
-    <PortalShell title="College admin" description="Driver roster" nav={[...ADMIN_NAV]}>
+    <PortalShell title="College admin" description="Who drives each bus" nav={[...ADMIN_NAV]}>
       <PageHeader
         title="Drivers"
-        description="Add driver emails, then assign each driver to one bus for trip sessions."
+        description="Add each driver’s email, then assign them to one bus. They sign in with that email and a one-time code."
       />
       {error ? (
         <Alert severity="error" sx={{ mb: 2 }}>
@@ -129,11 +129,11 @@ export default function AdminDriversPage() {
       ) : null}
 
       <Stack spacing={3}>
-        <SectionCard title="Roster">
+        <SectionCard title="Driver list">
           {drivers.length === 0 ? (
             <EmptyState
               title="No drivers yet"
-              description="Add a driver email below. They sign in with OTP using that address."
+              description="Add a driver’s email below. They’ll sign in with a code sent to that address."
             />
           ) : (
             <TableContainer>
@@ -142,7 +142,7 @@ export default function AdminDriversPage() {
                   <TableRow>
                     <TableCell>Name</TableCell>
                     <TableCell>Email</TableCell>
-                    <TableCell>Assigned bus</TableCell>
+                    <TableCell>Bus</TableCell>
                     <TableCell align="right">Assign</TableCell>
                   </TableRow>
                 </TableHead>
@@ -211,11 +211,13 @@ export default function AdminDriversPage() {
           )}
         </SectionCard>
 
-        <SectionCard title="Add driver">
+        <SectionCard title="Add a driver">
           <Stack spacing={2} sx={{ maxWidth: 560 }}>
             <TextField
-              label="Driver email"
+              label="Driver’s email"
               type="email"
+              placeholder="driver@college.edu"
+              helperText="They’ll sign in with a code sent to this address"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               fullWidth
@@ -223,6 +225,7 @@ export default function AdminDriversPage() {
             />
             <TextField
               label="Full name (optional)"
+              placeholder="e.g. Priya Sharma"
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
               fullWidth

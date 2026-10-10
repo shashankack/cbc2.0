@@ -111,10 +111,10 @@ export default function AdminEmergencyPage() {
     })) ?? [];
 
   return (
-    <PortalShell title="College admin" description="Distress follow-up" nav={nav}>
+    <PortalShell title="College admin" description="Urgent bus replacement" nav={nav}>
       <PageHeader
-        title="Emergency reallocation"
-        description="Open distress and disruption proposals. Confirming reassigns remaining students onto replacement buses."
+        title="Emergencies"
+        description="When a driver raises an emergency, review the suggested replacement buses and confirm so remaining students get a new ride."
         actions={result ? <StatusChip status={result.status} /> : null}
       />
       {error ? (
@@ -124,18 +124,18 @@ export default function AdminEmergencyPage() {
       ) : null}
 
       <Stack spacing={3}>
-        <SectionCard title="Open proposals">
+        <SectionCard title="Needs your decision">
           {rows.length === 0 ? (
-            <Alert severity="info">No proposed reallocations right now.</Alert>
+            <Alert severity="info">No emergencies waiting for a decision.</Alert>
           ) : (
             <TableContainer>
               <Table size="small">
                 <TableHead>
                   <TableRow>
-                    <TableCell>ID</TableCell>
-                    <TableCell>Kind</TableCell>
-                    <TableCell align="right">Remaining</TableCell>
-                    <TableCell align="right">Buses</TableCell>
+                    <TableCell>Reference</TableCell>
+                    <TableCell>Type</TableCell>
+                    <TableCell align="right">Students left</TableCell>
+                    <TableCell align="right">Replacement buses</TableCell>
                     <TableCell align="right">Actions</TableCell>
                   </TableRow>
                 </TableHead>
@@ -175,7 +175,7 @@ export default function AdminEmergencyPage() {
         </SectionCard>
 
         {result ? (
-          <SectionCard title="Last confirmed plan">
+          <SectionCard title="Last plan you confirmed">
             <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
               Plan {result.id}
               {result.confirmed_at

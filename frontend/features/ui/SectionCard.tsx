@@ -19,7 +19,17 @@ export default function SectionCard({
   actions,
 }: SectionCardProps) {
   return (
-    <Paper sx={{ p: { xs: 2, sm: 2.5 } }}>
+    <Paper
+      sx={{
+        p: { xs: 2, sm: 2.75 },
+        borderRadius: 2.5,
+        bgcolor: "background.paper",
+        transition: "border-color 160ms ease, box-shadow 160ms ease",
+        "&:hover": {
+          borderColor: "rgba(13, 148, 136, 0.28)",
+        },
+      }}
+    >
       {(title || actions) && (
         <Box
           sx={{
@@ -32,12 +42,12 @@ export default function SectionCard({
         >
           <Box>
             {title ? (
-              <Typography variant="subtitle1" sx={{ fontWeight: 650 }}>
+              <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
                 {title}
               </Typography>
             ) : null}
             {description ? (
-              <Typography variant="body2" color="text.secondary">
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25 }}>
                 {description}
               </Typography>
             ) : null}

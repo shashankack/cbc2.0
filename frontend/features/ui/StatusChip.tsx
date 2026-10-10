@@ -31,6 +31,33 @@ const TONE: Record<
   assigned: "info",
 };
 
+/** Plain-language labels for API status codes. */
+const FRIENDLY: Record<string, string> = {
+  pending: "Waiting",
+  proposed: "Draft",
+  processing: "Working…",
+  approved: "Approved",
+  active: "Active",
+  completed: "Done",
+  confirmed: "Confirmed",
+  locked: "Locked in",
+  imported: "Imported",
+  allocated: "Assigned",
+  scheduled: "Scheduled",
+  rejected: "Rejected",
+  failed: "Failed",
+  unavailable: "Not available",
+  ended: "Ended",
+  cancelled: "Cancelled",
+  needs_admin_review: "Needs review",
+  snapped: "On map",
+  available: "Ready",
+  in_service: "On a trip",
+  open: "Open",
+  resolved: "Resolved",
+  assigned: "Assigned",
+};
+
 type StatusChipProps = {
   status: string;
   label?: string;
@@ -39,13 +66,15 @@ type StatusChipProps = {
 export default function StatusChip({ status, label }: StatusChipProps) {
   const key = status.toLowerCase();
   const color = TONE[key] ?? "default";
+  const display =
+    label ?? FRIENDLY[key] ?? status.replaceAll("_", " ");
   return (
     <Chip
       size="small"
       color={color}
       variant={color === "default" ? "outlined" : "filled"}
-      label={label ?? status.replaceAll("_", " ")}
-      sx={{ textTransform: "capitalize", fontWeight: 600 }}
+      label={display}
+      sx={{ textTransform: "none", fontWeight: 600 }}
     />
   );
 }

@@ -105,10 +105,10 @@ export default function AdminTripsPage() {
   }
 
   return (
-    <PortalShell title="College admin" description="Trip analytics" nav={nav}>
+    <PortalShell title="College admin" description="When trips started and ended" nav={nav}>
       <PageHeader
-        title="Trip logs"
-        description="Daily start and end times from driver sessions. Trips are auto-scheduled when a planning run is confirmed."
+        title="Trip history"
+        description="Start and end times from each driver’s day. Trips appear automatically after you confirm a route plan."
       />
       {error ? (
         <Alert severity="error" sx={{ mb: 2 }}>
@@ -117,34 +117,34 @@ export default function AdminTripsPage() {
       ) : null}
 
       <Stack spacing={3}>
-        <SectionCard title="Summary">
+        <SectionCard title="At a glance">
           <Typography variant="body2" color="text.secondary">
-            {summary.total} trips · {summary.active} active · {summary.ended}{" "}
-            ended
+            {summary.total} trips · {summary.active} running now · {summary.ended}{" "}
+            finished
             {summary.avgMin != null
-              ? ` · avg duration ${summary.avgMin} min`
+              ? ` · average length ${summary.avgMin} min`
               : ""}
           </Typography>
         </SectionCard>
 
-        <SectionCard title="Sessions">
+        <SectionCard title="Trip list">
           <TextField
             select
             size="small"
-            label="Status"
+            label="Show"
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
             sx={{ mb: 2, minWidth: 180 }}
           >
-            <MenuItem value="all">All</MenuItem>
-            <MenuItem value="scheduled">Scheduled</MenuItem>
-            <MenuItem value="active">Active</MenuItem>
-            <MenuItem value="ended">Ended</MenuItem>
+            <MenuItem value="all">All trips</MenuItem>
+            <MenuItem value="scheduled">Not started yet</MenuItem>
+            <MenuItem value="active">Running now</MenuItem>
+            <MenuItem value="ended">Finished</MenuItem>
           </TextField>
           {trips.length === 0 ? (
             <EmptyState
               title="No trips yet"
-              description="Confirm a planning run with drivers assigned to buses, then drivers start their duty."
+              description="Confirm a route plan with drivers assigned to buses, then have drivers start their trip."
             />
           ) : (
             <TableContainer>

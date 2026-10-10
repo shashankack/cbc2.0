@@ -1,6 +1,14 @@
-"""Generate scripts/fixtures/pes_ring_road_students.csv (~150 students).
+"""Generate scripts/fixtures/pes_ring_road_students.csv (150 students).
 
-Neighborhood pockets around Bangalore, commuting to PES Ring Road campus.
+Three corridor blobs around PES Ring Road, five neighborhood pickups each
+(10 students per pickup).
+
+Geometry rules (must match CampusSettings defaults):
+  - Within a pocket: ~40–80 m jitter → one DBSCAN stop (eps 500 m)
+  - Pocket centers ~750–900 m apart → separate stops, same corridor
+  - Each corridor is a local blob so nearest-neighbor tour finishes it
+    before jumping; blobs > ~2 km apart → exactly 3 packed routes
+
 Run from backend/:  python scripts/generate_pes_students_csv.py
 """
 
@@ -11,23 +19,39 @@ from pathlib import Path
 
 OUT = Path(__file__).resolve().parent / "fixtures" / "pes_ring_road_students.csv"
 
-# (label, lat, lng) — pocket centers; 10 students jittered around each.
-POCKETS: list[tuple[str, float, float]] = [
-    ("Banaswadi", 13.0154, 77.6413),
-    ("Ramamurthy Nagar", 13.0162, 77.6748),
-    ("JP Nagar", 12.9063, 77.5855),
-    ("Hoskote", 13.0709, 77.7982),
-    ("Yelahanka", 13.1007, 77.5960),
-    ("Jayanagar", 12.9304, 77.5835),
-    ("Tumkur Road", 13.0395, 77.5210),
-    ("Vijayanagar", 12.9634, 77.5372),
-    ("Basavanagudi", 12.9416, 77.5735),
-    ("Kengeri", 12.9074, 77.4858),
-    ("Jnanabharathi", 12.9482, 77.5015),
-    ("Bangalore University", 12.9538, 77.5132),
-    ("RR Nagar", 12.9268, 77.5195),
-    ("Banashankari", 12.9255, 77.5488),
-    ("BTM Layout", 12.9166, 77.6101),
+# PES Ring Road depot ≈ 12.93424, 77.53432
+# Compact blobs (local NN chains) far from each other (route splits).
+CORRIDORS: list[tuple[str, list[tuple[str, float, float]]]] = [
+    (
+        "West — Kengeri / RR Nagar",
+        [
+            ("Kengeri Satellite", 12.9140, 77.4920),
+            ("Jnanabharathi Cross", 12.9200, 77.4990),
+            ("RR Nagar Arch", 12.9260, 77.5060),
+            ("Pattanagere Signal", 12.9305, 77.5130),
+            ("Nagarbhavi Circle", 12.9340, 77.5200),
+        ],
+    ),
+    (
+        "South — Banashankari / BTM",
+        [
+            ("BTM 2nd Stage", 12.9080, 77.6000),
+            ("JP Nagar 5th Phase", 12.9130, 77.5900),
+            ("Banashankari Temple", 12.9180, 77.5800),
+            ("Kathriguppe Circle", 12.9230, 77.5700),
+            ("Girinagar Park", 12.9275, 77.5600),
+        ],
+    ),
+    (
+        "North — Vijayanagar / Magadi",
+        [
+            ("Magadi Road Market", 12.9800, 77.5120),
+            ("Vijayanagar Metro", 12.9730, 77.5180),
+            ("Attiguppe Bridge", 12.9665, 77.5240),
+            ("Deepanjali Nagar", 12.9605, 77.5295),
+            ("Chord Road Junction", 12.9545, 77.5340),
+        ],
+    ),
 ]
 
 FIRST = [
@@ -37,42 +61,45 @@ FIRST = [
     "Isha", "Varun", "Pooja", "Siddharth", "Kavya", "Aman", "Tanvi", "Nikhil",
     "Shruti", "Yash", "Anika", "Rajat", "Myra", "Kiran", "Sana", "Vivek",
     "Aarav", "Kiara", "Reyansh", "Aadhya", "Vivaan", "Anvi", "Shaurya", "Ira",
-    "Atharv", "Navya",
+    "Atharv", "Navya", "Advait", "Mira", "Saanvi", "Dhruv", "Kabira", "Anikaa",
 ]
 LAST = [
     "Khan", "Mehta", "Nair", "Rao", "Iyer", "Reddy", "Krishnan", "Malhotra",
     "Shah", "Joshi", "Patel", "Das", "Singh", "Gupta", "Menon", "Bose",
     "Ali", "Verma", "Pillai", "Desai", "Farooq", "Jain", "Chopra", "Bhat",
-    "Shetty", "Kulkarni", "Hegde", "Nayak", "Prasad", "Mukherjee",
+    "Shetty", "Kulkarni", "Hegde", "Nayak", "Prasad", "Mukherjee", "Shenoy",
+    "Kamath", "Pai", "Gowda", "Shekar", "Banerjee",
 ]
 
 
 def main() -> None:
-    per_pocket = 10  # 15 × 10 = 150
+    per_pocket = 10  # 3 × 5 × 10 = 150
     rows: list[dict[str, str]] = []
     n = 0
-    for _label, base_lat, base_lng in POCKETS:
-        for j in range(per_pocket):
-            n += 1
-            # Tight ~40–80 m jitter so DBSCAN (eps 500 m) keeps one stop per pocket.
-            dlat = ((j % 5) - 2) * 0.00012
-            dlng = ((j // 5) - 1) * 0.00014 + (j % 3) * 0.00005
-            first = FIRST[(n - 1) % len(FIRST)]
-            last = LAST[(n * 3 + j) % len(LAST)]
-            # Avoid duplicate full names within the file.
-            name = f"{first} {last}"
-            if any(r["name"] == name for r in rows):
-                name = f"{first} {last} {n}"
-            local = f"{first}.{last}{n}".lower().replace(" ", "")
-            rows.append(
-                {
-                    "name": name,
-                    "srn": f"PES2024{n:04d}",
-                    "email": f"{local}@pes.edu",
-                    "lat": f"{base_lat + dlat:.5f}",
-                    "lng": f"{base_lng + dlng:.5f}",
-                }
-            )
+    used_names: set[str] = set()
+
+    for _corridor, pockets in CORRIDORS:
+        for _label, base_lat, base_lng in pockets:
+            for j in range(per_pocket):
+                n += 1
+                dlat = ((j % 5) - 2) * 0.00012
+                dlng = ((j // 5) - 1) * 0.00014 + (j % 3) * 0.00005
+                first = FIRST[(n - 1) % len(FIRST)]
+                last = LAST[(n * 3 + j) % len(LAST)]
+                name = f"{first} {last}"
+                if name in used_names:
+                    name = f"{first} {last} {n}"
+                used_names.add(name)
+                local = f"{first}.{last}{n}".lower().replace(" ", "")
+                rows.append(
+                    {
+                        "name": name,
+                        "srn": f"PES2024{n:04d}",
+                        "email": f"{local}@pes.edu",
+                        "lat": f"{base_lat + dlat:.5f}",
+                        "lng": f"{base_lng + dlng:.5f}",
+                    }
+                )
 
     OUT.parent.mkdir(parents=True, exist_ok=True)
     with OUT.open("w", encoding="utf-8", newline="") as f:
@@ -81,9 +108,11 @@ def main() -> None:
         w.writerows(rows)
 
     print(f"Wrote {len(rows)} students -> {OUT}")
-    print("Pockets:")
-    for label, lat, lng in POCKETS:
-        print(f"  {label:22} {lat:.4f}, {lng:.4f}")
+    print("Corridors (5 pickups x 10 students each):")
+    for corridor, pockets in CORRIDORS:
+        print(f"  {corridor}")
+        for label, lat, lng in pockets:
+            print(f"    - {label:24} {lat:.5f}, {lng:.5f}")
 
 
 if __name__ == "__main__":

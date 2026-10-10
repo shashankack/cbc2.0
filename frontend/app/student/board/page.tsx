@@ -18,8 +18,8 @@ import { hasRole } from "@/lib/roles";
 import type { Trip } from "@/types/api";
 
 const NAV = [
-  { href: "/student", label: "Assignment" },
-  { href: "/student/board", label: "Board" },
+  { href: "/student", label: "My ride" },
+  { href: "/student/board", label: "Get on the bus" },
   { href: "/student/trip", label: "Live map" },
 ];
 
@@ -64,9 +64,9 @@ export default function StudentBoardPage() {
           qr_token: qrToken,
         });
         setStatus("success");
-        setMessage("Boarded successfully.");
+        setMessage("You’re on the bus. Have a good ride.");
       } catch (err) {
-        const msg = err instanceof ApiError ? err.message : "Boarding failed.";
+        const msg = err instanceof ApiError ? err.message : "Could not check you in.";
         setStatus(msg.toLowerCase().includes("already") ? "duplicate" : "error");
         setMessage(msg);
       }
@@ -80,7 +80,9 @@ export default function StudentBoardPage() {
       const decoded = decodeBoardingQr(raw);
       if (!decoded) {
         setStatus("error");
-        setMessage("QR did not contain a valid CBC boarding payload.");
+        setMessage(
+          "That QR code doesn’t look like a boarding code from your driver. Try again or paste the code text below.",
+        );
         return;
       }
       setTripId(decoded.trip_id);
@@ -97,7 +99,9 @@ export default function StudentBoardPage() {
     const qrToken = fromPayload?.qr_token || token.trim();
     if (!tid || !qrToken) {
       setStatus("error");
-      setMessage("Trip ID and QR token required (or paste a CBC1: payload).");
+      setMessage(
+        "Scan the driver’s QR, or paste the boarding code from their screen.",
+      );
       return;
     }
     if (fromPayload) {
@@ -110,16 +114,16 @@ export default function StudentBoardPage() {
   if (loading || !user) return null;
 
   return (
-    <PortalShell title="Student" description="QR boarding" nav={NAV}>
+    <PortalShell title="Student" description="Check in when you board" nav={NAV}>
       <PageHeader
-        title="Board with QR"
-        description="Chromium browsers can scan the driver’s QR with the camera. Elsewhere (or if the camera is blocked), paste the CBC1: payload. Active trip is prefilled when your bus is running."
+        title="Get on the bus"
+        description="Point your camera at the QR code on the driver’s phone. If the camera doesn’t work, copy the boarding code from their screen and paste it below."
       />
       <SectionCard>
         <Stack spacing={2.5} sx={{ maxWidth: 560 }}>
           <Alert severity="info">
-            Live camera scan needs Chrome/Edge (BarcodeDetector). Firefox/Safari:
-            copy the CBC1: text from the driver screen and paste below.
+            Camera scan works best in Chrome or Edge. On other browsers, ask your
+            driver for the boarding code text and paste it below.
           </Alert>
           <QrCameraScanner
             onScan={onCameraScan}
@@ -127,30 +131,33 @@ export default function StudentBoardPage() {
           />
           <Stack spacing={2} component="form" onSubmit={board}>
             <TextField
-              label="Paste QR payload"
+              label="Paste boarding code"
               value={payload}
               onChange={(e) => setPayload(e.target.value)}
-              placeholder="CBC1:<trip-id>|<token>"
-              helperText="Works on every browser — preferred fallback when camera scan is unavailable."
+              placeholder="Paste the code from the driver’s screen"
+              helperText="Use this if you can’t scan with the camera"
               fullWidth
             />
             <Typography variant="caption" color="text.secondary">
-              Or enter trip ID + token manually
+              Advanced: enter the two parts separately if your driver shares them
+              that way
             </Typography>
             <TextField
-              label="Trip ID"
+              label="Trip reference"
               value={tripId}
               onChange={(e) => setTripId(e.target.value)}
+              helperText="Filled automatically when your bus trip is running"
               fullWidth
             />
             <TextField
-              label="QR token"
+              label="Boarding key"
               value={token}
               onChange={(e) => setToken(e.target.value)}
+              helperText="Usually comes from scanning or pasting the full code"
               fullWidth
             />
             <Button type="submit" variant="contained" size="large">
-              Submit boarding
+              Check me in
             </Button>
           </Stack>
           <BoardingScanPanel

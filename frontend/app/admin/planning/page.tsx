@@ -421,7 +421,7 @@ function AdminPlanningPageInner() {
             label:
               "name" in depotStop && depotStop.name
                 ? depotStop.name
-                : "Campus depot",
+                : "Campus pin",
           }
         : null;
     const centroids = run.stops
@@ -495,13 +495,13 @@ function AdminPlanningPageInner() {
     campuses.find((c) => c.id === (run?.campus_id ?? campusId))?.code ?? "";
 
   return (
-    <PortalShell title="College admin" description="Cluster and confirm" nav={nav}>
+    <PortalShell title="College admin" description="Build and lock bus routes" nav={nav}>
       <PageHeader
-        title="Planning"
-        description="Pick the campus that has imported students and available buses, run a proposal, then confirm to lock routes."
+        title="Plan bus routes"
+        description="Choose a campus that already has uploaded students and ready buses. Create a draft plan, adjust stops if needed, then confirm to lock pickups for students."
         actions={
           <Button href="/admin/import" variant="outlined">
-            Import students
+            Upload students
           </Button>
         }
       />
@@ -511,7 +511,7 @@ function AdminPlanningPageInner() {
         </Alert>
       ) : null}
       <Stack spacing={3}>
-        <SectionCard title="Run proposal">
+        <SectionCard title="Create a draft plan">
           <Stack spacing={2}>
             <TextField
               select
@@ -522,7 +522,7 @@ function AdminPlanningPageInner() {
                 setBatchId("");
               }}
               fullWidth
-              helperText="Planning uses students and available buses on this campus only."
+              helperText="Only students and buses for this campus are used."
             >
               {campuses.map((c) => (
                 <MenuItem key={c.id} value={c.id}>
@@ -532,18 +532,18 @@ function AdminPlanningPageInner() {
             </TextField>
             <TextField
               select
-              label="Import batch"
+              label="Which student list?"
               value={batchId}
               onChange={(e) => setBatchId(e.target.value)}
               fullWidth
-              helperText="Optional — leave empty to use all imported students on the campus."
+              helperText="Optional — leave as “All students” to include everyone uploaded for this campus."
             >
-              <MenuItem value="">All imported students on campus</MenuItem>
+              <MenuItem value="">All students on this campus</MenuItem>
               {campusBatches.map((b) => (
                 <MenuItem key={b.id} value={b.id}>
                   {new Date(b.created_at).toLocaleString()}
-                  {b.valid_count != null ? ` · ${b.valid_count} valid` : ""}
-                  {b.is_active ? " · active" : ""}
+                  {b.valid_count != null ? ` · ${b.valid_count} students` : ""}
+                  {b.is_active ? " · ready to plan" : ""}
                 </MenuItem>
               ))}
             </TextField>
@@ -553,13 +553,13 @@ function AdminPlanningPageInner() {
               disabled={!campusId || running}
               sx={{ alignSelf: "flex-start" }}
             >
-              {running ? "Running…" : "Run clustering / assignment"}
+              {running ? "Building plan…" : "Build draft routes"}
             </Button>
           </Stack>
         </SectionCard>
 
         {runs.length > 0 ? (
-          <SectionCard title="Previous runs">
+          <SectionCard title="Earlier plans">
             <TableContainer>
               <Table size="small">
                 <TableHead>
@@ -598,23 +598,24 @@ function AdminPlanningPageInner() {
 
         {run ? (
           <SectionCard
-            title="Proposal result"
+            title="Draft plan"
             actions={<StatusChip status={run.status} />}
           >
             <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
               {campusCode ? `${campusCode} · ` : ""}
-              Run {run.id.slice(0, 8)} · routes {run.routes.length} · students{" "}
-              {run.items.length}
-              {typeof review === "number" ? ` · review ${review}` : ""}
+              {run.routes.length} bus routes · {run.items.length} students
+              {typeof review === "number" && review > 0
+                ? ` · ${review} need your review`
+                : ""}
               {run.status === "confirmed"
-                ? " · pickups locked for students"
+                ? " · pickups are locked for students"
                 : ""}
             </Typography>
             {campusCode === "MAIN" &&
             campuses.some((c) => c.code === "RING") ? (
               <Alert severity="info" sx={{ mb: 2 }}>
-                This run is on campus MAIN. For PES Ring Road depot returns, view or
-                re-run planning on campus RING.
+                This plan is for campus MAIN. For Ring Road campus routes, open or
+                rebuild a plan on campus RING.
               </Alert>
             ) : null}
 
@@ -677,10 +678,10 @@ function AdminPlanningPageInner() {
 
             {run.routes.length > 0 ? (
               <Stack spacing={2} sx={{ mt: 2 }}>
-                <Typography variant="subtitle2">Route order</Typography>
+                <Typography variant="subtitle2">Stop order on each bus</Typography>
                 <Typography variant="body2" color="text.secondary">
-                  ↑ ↓ moves a pickup earlier or later on that bus. Campus start/end
-                  stay fixed.
+                  Use ↑ ↓ to move a pickup earlier or later. The campus start and
+                  end stay fixed.
                 </Typography>
                 {run.routes.map((route) => (
                   <Stack key={route.id} spacing={1}>

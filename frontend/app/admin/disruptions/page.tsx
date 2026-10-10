@@ -93,13 +93,13 @@ export default function AdminDisruptionsPage() {
   }
 
   return (
-    <PortalShell title="College admin" description="Non-emergency reassignment" nav={nav}>
+    <PortalShell title="College admin" description="When a bus can’t run" nav={nav}>
       <PageHeader
-        title="Disruptions"
-        description="Created from Buses → Disrupt + propose when a vehicle goes unavailable. Confirm to reassign locked students."
+        title="Bus problems"
+        description="When a bus goes out of service, use Buses → “Bus problem → reassign”. Review the suggested moves here, then confirm so students get a new bus."
         actions={
           <Button href="/admin/buses" variant="outlined">
-            Fleet
+            Buses
           </Button>
         }
       />
@@ -113,11 +113,11 @@ export default function AdminDisruptionsPage() {
           {message}
         </Alert>
       ) : null}
-      <SectionCard title="Open disruption proposals">
+      <SectionCard title="Waiting for your decision">
         {rows.length === 0 ? (
           <Alert severity="info">
-            No open disruptions. Mark a bus unavailable with “Disrupt + propose”
-            on the Buses page.
+            Nothing waiting right now. On the Buses page, choose “Bus problem →
+            reassign” when a vehicle can’t run.
           </Alert>
         ) : (
           <TableContainer>

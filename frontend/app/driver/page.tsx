@@ -242,12 +242,12 @@ export default function DriverPage() {
   return (
     <PortalShell
       title="Driver"
-      description="Start / end trip"
-      nav={[{ href: "/driver", label: "Trip" }]}
+      description="Start and end today’s trip"
+      nav={[{ href: "/driver", label: "Today’s trip" }]}
     >
       <PageHeader
-        title="Today's trip"
-        description="Your bus and route are assigned automatically. Start, end, or raise emergency — start and end times are logged for admin."
+        title="Today’s trip"
+        description="Your bus and route are already assigned. Start when you’re ready, show students the boarding QR, and end the trip when you’re done. Times are saved for the college admin."
         actions={
           <StatusChip
             status={sessionStatus === "loading" ? "processing" : sessionStatus}
@@ -267,15 +267,15 @@ export default function DriverPage() {
 
       <Stack spacing={3} sx={{ maxWidth: 800 }}>
         {!duty ? (
-          <SectionCard title="Assignment">
+          <SectionCard title="Your assignment">
             <EmptyState
-              title="No duty yet"
-              description="Ask college admin to assign you a bus and confirm a planning run."
+              title="No trip assigned yet"
+              description="Ask your college admin to assign you a bus and confirm the route plan."
             />
           </SectionCard>
         ) : (
           <>
-            <SectionCard title="Assignment">
+            <SectionCard title="Your assignment">
               <Stack spacing={0.75}>
                 <Typography variant="body1" sx={{ fontWeight: 600 }}>
                   {duty.route_name}
@@ -299,7 +299,7 @@ export default function DriverPage() {
               </Stack>
             </SectionCard>
 
-            <SectionCard title="Session">
+            <SectionCard title="Start or end">
               <TripSessionControls
                 status={busy ? "loading" : sessionStatus}
                 onStart={() => void start()}
@@ -311,7 +311,7 @@ export default function DriverPage() {
             </SectionCard>
 
             {qrToken && trip && sessionStatus === "active" ? (
-              <SectionCard title="Boarding QR">
+              <SectionCard title="Boarding QR for students">
                 <TripQrPanel
                   status="active"
                   qrValue={encodeBoardingQr({
@@ -331,17 +331,17 @@ export default function DriverPage() {
                         setError(
                           err instanceof ApiError
                             ? err.message
-                            : "QR refresh failed.",
+                            : "Could not refresh the boarding QR.",
                         );
                       });
                   }}
-                  caption="Students scan this QR (or paste the payload) while the session is active."
+                  caption="Students scan this code (or paste the text under it) while your trip is running."
                 />
               </SectionCard>
             ) : null}
 
             {itinerary.length > 0 ? (
-              <SectionCard title="Ordered stops">
+              <SectionCard title="Stops in order">
                 <OrderedStopList
                   stops={[...itinerary]
                     .sort((a, b) => a.sequence - b.sequence)
@@ -377,7 +377,7 @@ export default function DriverPage() {
             {sessionStatus === "active" ? (
               <SectionCard
                 title="Emergency"
-                description="Captures GPS and proposes replacement capacity for admin confirm."
+                description="Shares your location and asks the college admin to move remaining students onto other buses."
               >
                 <DistressButton onDistress={() => void distress()} />
               </SectionCard>

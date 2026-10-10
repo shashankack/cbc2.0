@@ -20,7 +20,7 @@ import { resolveHomePath, useAuth } from "@/lib/auth";
 
 const NAV = [
   { href: "/operator", label: "Colleges" },
-  { href: "/operator/domains", label: "Domains" },
+  { href: "/operator/domains", label: "Email endings" },
 ];
 
 type DomainRow = {
@@ -101,12 +101,12 @@ export default function OperatorDomainsPage() {
   return (
     <PortalShell
       title="Operator"
-      description="Verify college email domains"
+      description="Approve college email endings"
       nav={NAV}
     >
       <PageHeader
-        title="Domain approvals"
-        description="Pending domain requests from college admins. Approve after DNS TXT is set (required in production)."
+        title="College email approvals"
+        description="College admins request which email endings (like pes.edu) belong to them. Approve after they’ve proven ownership (in production that means their DNS check is done)."
         actions={
           <TextField
             select
@@ -133,7 +133,7 @@ export default function OperatorDomainsPage() {
           {message}
         </Alert>
       ) : null}
-      <SectionCard title="Domain requests">
+      <SectionCard title="Requests">
         {rows.length === 0 ? (
           <Alert severity="info">No domains for this filter.</Alert>
         ) : (

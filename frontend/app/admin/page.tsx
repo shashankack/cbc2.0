@@ -19,6 +19,7 @@ import TableHead from "@mui/material/TableHead";
 import TableRow from "@mui/material/TableRow";
 import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
+import AdminDashboardHero from "@/features/admin/AdminDashboardHero";
 import { ADMIN_NAV } from "@/features/admin/nav";
 import { roundCoord } from "@/features/maps/geo";
 import PortalShell from "@/features/shell/PortalShell";
@@ -288,22 +289,37 @@ export default function AdminCampusesPage() {
     return (
       <PortalShell title="College admin" nav={nav}>
         <Alert severity="warning">
-          No college membership is linked to this account yet. Approve a college
-          application with this email as admin, then sign in again.
+          This email is not linked to a college yet. Ask the platform operator to
+          approve your college application, then sign in again.
         </Alert>
       </PortalShell>
     );
   }
 
+  const campusesWithDepot = campuses.filter(
+    (c) => c.lat != null && c.lng != null,
+  ).length;
+
   return (
     <PortalShell
       title="College admin"
-      description="Campuses, settings, and domains"
+      description="Campuses and student email domains"
       nav={nav}
     >
+      <AdminDashboardHero
+        collegeLabel={user.email}
+        stats={[
+          { label: "Campuses", value: campuses.length },
+          { label: "Campus pin set", value: campusesWithDepot },
+          {
+            label: "Ready for routes",
+            value: campusesWithDepot > 0 ? "Yes" : "No",
+          },
+        ]}
+      />
       <PageHeader
-        title="Campuses & domain"
-        description="Set campus depot coordinates so every planned route starts and ends at campus. Use the map or your current location."
+        title="Campuses & student emails"
+        description="Mark where each campus sits on the map. Every bus route will start and end there. You can search the map or use your phone’s location."
       />
       {error ? (
         <Alert severity="error" sx={{ mb: 2 }}>
@@ -313,13 +329,13 @@ export default function AdminCampusesPage() {
 
       <Stack spacing={3}>
         <SectionCard
-          title="Campuses"
-          description="Depot lat/lng and planning settings are required before import and planning."
+          title="Your campuses"
+          description="Set a campus pin and route preferences before you upload students or plan buses."
         >
           {campuses.length === 0 ? (
             <EmptyState
               title="No campuses yet"
-              description="Create a campus code (for example MAIN) with depot coordinates."
+              description="Add a campus name and short code (for example Ring Road / RING), then place it on the map."
             />
           ) : (
             <TableContainer>
@@ -327,10 +343,10 @@ export default function AdminCampusesPage() {
                 <TableHead>
                   <TableRow>
                     <TableCell>Name</TableCell>
-                    <TableCell>Code</TableCell>
-                    <TableCell>Depot lat</TableCell>
-                    <TableCell>Depot lng</TableCell>
-                    <TableCell>Settings</TableCell>
+                    <TableCell>Short code</TableCell>
+                    <TableCell>North–south (map)</TableCell>
+                    <TableCell>East–west (map)</TableCell>
+                    <TableCell>Status</TableCell>
                     <TableCell align="right">Actions</TableCell>
                   </TableRow>
                 </TableHead>
@@ -352,7 +368,12 @@ export default function AdminCampusesPage() {
                                 [c.id]: { ...draft, lat: e.target.value },
                               }))
                             }
-                            placeholder="12.93424"
+                            placeholder="From map"
+                            slotProps={{
+                              htmlInput: {
+                                "aria-label": `Map north-south for ${c.name}`,
+                              },
+                            }}
                           />
                         </TableCell>
                         <TableCell sx={{ minWidth: 120 }}>
@@ -365,18 +386,27 @@ export default function AdminCampusesPage() {
                                 [c.id]: { ...draft, lng: e.target.value },
                               }))
                             }
-                            placeholder="77.53432"
+                            placeholder="From map"
+                            slotProps={{
+                              htmlInput: {
+                                "aria-label": `Map east-west for ${c.name}`,
+                              },
+                            }}
                           />
                         </TableCell>
                         <TableCell>
                           <Stack spacing={0.5}>
                             <StatusChip
                               status={depotOk ? "available" : "pending"}
-                              label={depotOk ? "depot set" : "depot missing"}
+                              label={depotOk ? "Campus pin set" : "Needs campus pin"}
                             />
                             <StatusChip
                               status={c.settings ? "active" : "pending"}
-                              label={c.settings ? "settings ok" : "settings missing"}
+                              label={
+                                c.settings
+                                  ? "Route preferences saved"
+                                  : "Needs route preferences"
+                              }
                             />
                           </Stack>
                         </TableCell>
@@ -393,19 +423,21 @@ export default function AdminCampusesPage() {
                                 })
                               }
                             >
-                              Map / locate
+                              Place on map
                             </Button>
                             <Button
                               size="small"
                               onClick={() => void saveCoords(c.id)}
                             >
-                              Save depot
+                              Save campus pin
                             </Button>
                             <Button
                               size="small"
                               onClick={() => void saveSettings(c.id)}
                             >
-                              {c.settings ? "Update settings" : "Save settings"}
+                              {c.settings
+                                ? "Update preferences"
+                                : "Save preferences"}
                             </Button>
                           </Stack>
                         </TableCell>
@@ -418,55 +450,70 @@ export default function AdminCampusesPage() {
           )}
 
           <Stack spacing={2} sx={{ mt: 2 }}>
-            <Typography variant="subtitle2">Planning settings (applied per campus)</Typography>
+            <Typography variant="subtitle2">
+              How far students can walk & how pickups are grouped
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              These apply when you create routes for a campus. Defaults work for
+              most colleges — change them only if needed.
+            </Typography>
             <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
               <TextField
-                label="Max walk to stop (m)"
+                label="Farthest walk to a stop (meters)"
+                helperText="How far a student may walk from home to their pickup"
                 value={maxWalk}
                 onChange={(e) => setMaxWalk(e.target.value)}
                 fullWidth
               />
               <TextField
-                label="Cluster eps (m)"
+                label="Group nearby homes within (meters)"
+                helperText="Homes closer than this share one pickup stop"
                 value={clusterEps}
                 onChange={(e) => setClusterEps(e.target.value)}
                 fullWidth
               />
               <TextField
-                label="Min samples"
+                label="Minimum homes for a stop"
+                helperText="Fewer than this stay as single pickups"
                 value={minSamples}
                 onChange={(e) => setMinSamples(e.target.value)}
                 fullWidth
               />
               <TextField
-                label="Min students / route"
+                label="Minimum students on a bus"
+                helperText="Smaller groups are merged when possible"
                 value={minPerRoute}
                 onChange={(e) => setMinPerRoute(e.target.value)}
                 fullWidth
               />
             </Stack>
-            <Typography variant="subtitle2">Create campus</Typography>
+            <Typography variant="subtitle2">Add a campus</Typography>
             <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
               <TextField
                 label="Campus name"
+                placeholder="e.g. Ring Road Campus"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 fullWidth
               />
               <TextField
-                label="Code"
+                label="Short code"
+                placeholder="e.g. RING"
+                helperText="A short label used in lists"
                 value={code}
                 onChange={(e) => setCode(e.target.value)}
                 fullWidth
               />
               <TextField
-                label="Depot lat"
+                label="North–south (optional)"
+                placeholder="Or use Place on map"
                 value={createLat}
                 onChange={(e) => setCreateLat(e.target.value)}
                 fullWidth
               />
               <TextField
-                label="Depot lng"
+                label="East–west (optional)"
+                placeholder="Or use Place on map"
                 value={createLng}
                 onChange={(e) => setCreateLng(e.target.value)}
                 fullWidth
@@ -478,39 +525,41 @@ export default function AdminCampusesPage() {
                 onClick={() =>
                   openDepotPicker({
                     kind: "create",
-                    title: "New campus depot",
+                    title: "New campus pin",
                   })
                 }
               >
-                Map / locate depot
+                Place on map
               </Button>
               <Button variant="contained" onClick={() => void createCampus()}>
-                Create campus
+                Add campus
               </Button>
             </Stack>
           </Stack>
         </SectionCard>
 
         <SectionCard
-          title="Email domain"
-          description="Request a domain, then ask the platform operator to approve it."
+          title="Which emails belong to your college"
+          description="Ask to approve your college email ending (like pes.edu). A platform operator must confirm it before students can sign in with those addresses."
         >
           <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
             <TextField
-              label="Email domain"
-              placeholder="college.edu"
+              label="College email ending"
+              placeholder="e.g. pes.edu"
+              helperText="The part after @ in student emails"
               value={domain}
               onChange={(e) => setDomain(e.target.value)}
               fullWidth
             />
             <Button variant="outlined" onClick={() => void requestDomain()}>
-              Request domain
+              Request approval
             </Button>
           </Stack>
           {domainToken ? (
             <Alert severity="info" sx={{ mt: 2 }}>
               <Typography variant="body2">
-                Give the operator this domain id + TXT token:
+                Send this reference to the platform operator so they can approve
+                your email ending:
               </Typography>
               <Typography variant="body2" sx={{ fontFamily: "monospace", mt: 0.5 }}>
                 {domainToken}
@@ -527,14 +576,14 @@ export default function AdminCampusesPage() {
         maxWidth="md"
       >
         <DialogTitle>
-          Set depot — {depotTarget?.title ?? "Campus"}
+          Place campus on map — {depotTarget?.title ?? "Campus"}
         </DialogTitle>
         <DialogContent>
           <Stack spacing={2} sx={{ pt: 1 }}>
             <Typography variant="body2" color="text.secondary">
-              Search for a place (e.g. PES University), use your current location,
-              or click the map. Apply saves the depot to this campus immediately
-              so planning uses the same pin.
+              Search for your campus (for example PES University), use your
+              current location, or tap the map. Saving sets where every bus route
+              starts and ends.
             </Typography>
             {geoError ? <Alert severity="warning">{geoError}</Alert> : null}
             <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap" }}>
@@ -543,11 +592,11 @@ export default function AdminCampusesPage() {
                 disabled={geoBusy}
                 onClick={() => void useCurrentLocation()}
               >
-                {geoBusy ? "Locating…" : "Use current location"}
+                {geoBusy ? "Finding you…" : "Use my current location"}
               </Button>
               {pickerPoint ? (
                 <Typography variant="body2" sx={{ alignSelf: "center" }}>
-                  {pickerPoint.lat.toFixed(6)}, {pickerPoint.lng.toFixed(6)}
+                  Pin selected
                 </Typography>
               ) : (
                 <Typography
@@ -555,7 +604,7 @@ export default function AdminCampusesPage() {
                   color="text.secondary"
                   sx={{ alignSelf: "center" }}
                 >
-                  No point selected yet
+                  No pin selected yet
                 </Typography>
               )}
             </Stack>
@@ -574,7 +623,7 @@ export default function AdminCampusesPage() {
             disabled={geoBusy || !pickerPoint}
             onClick={() => void applyPicker()}
           >
-            {geoBusy ? "Saving…" : "Apply & save depot"}
+            {geoBusy ? "Saving…" : "Save campus pin"}
           </Button>
         </DialogActions>
       </Dialog>

@@ -14,8 +14,8 @@ import { hasRole } from "@/lib/roles";
 import type { Allocation } from "@/types/api";
 
 const NAV = [
-  { href: "/student", label: "Assignment" },
-  { href: "/student/board", label: "Board" },
+  { href: "/student", label: "My ride" },
+  { href: "/student/board", label: "Get on the bus" },
   { href: "/student/trip", label: "Live map" },
 ];
 
@@ -68,17 +68,17 @@ export default function StudentPage() {
   if (loading || !user) return null;
 
   return (
-    <PortalShell title="Student" description="Your locked pickup" nav={NAV}>
+    <PortalShell title="Student" description="Your pickup and bus" nav={NAV}>
       <PageHeader
-        title="My assignment"
-        description="Pick/drop is locked after your college admin confirms a planning run."
+        title="My ride"
+        description="Once your college locks in the routes, you’ll see your pickup stop and bus here. Those don’t change until the next planning cycle."
         actions={
           <Stack direction="row" spacing={1}>
             <Button href="/student/trip" variant="outlined">
-              Live map
+              See bus on map
             </Button>
             <Button href="/student/board" variant="contained">
-              Board with QR
+              Get on the bus
             </Button>
           </Stack>
         }
@@ -91,41 +91,36 @@ export default function StudentPage() {
 
       {!allocation ? (
         <EmptyState
-          title="No locked assignment yet"
-          description="When planning is confirmed, your stop, route, and bus will appear here."
+          title="No ride assigned yet"
+          description="When your college finishes planning, your pickup stop, route, and bus will show up here."
         />
       ) : (
         <SectionCard
-          title="Confirmed allocation"
-          actions={<StatusChip status="locked" />}
+          title="Your assigned ride"
+          actions={<StatusChip status="locked" label="Locked in" />}
         >
           <Stack spacing={2}>
             <Field
               label="Pickup stop"
-              value={allocation.stop_name ?? allocation.stop_id}
+              value={allocation.stop_name ?? "Assigned stop"}
             />
             {allocation.stop_lat != null && allocation.stop_lng != null ? (
               <Field
-                label="Stop coordinates"
+                label="Stop on the map"
                 value={`${allocation.stop_lat.toFixed(5)}, ${allocation.stop_lng.toFixed(5)}`}
                 mono
               />
             ) : null}
             <Field
-              label="Route"
-              value={allocation.route_name ?? allocation.route_id}
+              label="Bus route"
+              value={allocation.route_name ?? "Assigned route"}
             />
             <Field
-              label="Bus"
+              label="Bus number plate"
               value={
-                allocation.bus_registration_number ?? allocation.bus_id
+                allocation.bus_registration_number ?? "Assigned bus"
               }
             />
-            <Typography variant="caption" color="text.secondary">
-              IDs — stop {allocation.stop_id.slice(0, 8)}… · route{" "}
-              {allocation.route_id.slice(0, 8)}… · bus{" "}
-              {allocation.bus_id.slice(0, 8)}…
-            </Typography>
           </Stack>
         </SectionCard>
       )}

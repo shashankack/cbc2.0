@@ -1,5 +1,6 @@
 html {
   height: 100%;
+  color-scheme: light;
 }
 
 html,
@@ -11,18 +12,10 @@ body {
 body {
   min-height: 100%;
   margin: 0;
+  background: #f1f5f9;
+  color: #0f172a;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-}
-
-html[data-color-mode="light"] body {
-  background: #f4f6f9;
-  color: #0b1f3a;
-}
-
-html[data-color-mode="dark"] body {
-  background: #0b1220;
-  color: #e8eef7;
 }
 
 * {
@@ -38,24 +31,4 @@ a {
   html:focus-within {
     scroll-behavior: auto;
   }
-}
-
-/* Leaflet / OSM contrast for UniTransit dark mode (owner CSS; map components untouched) */
-html[data-color-mode="dark"] .leaflet-tile-pane {
-  filter: brightness(0.72) contrast(1.08) saturate(0.78);
-}
-
-html[data-color-mode="dark"] .leaflet-control-attribution {
-  background: rgba(21, 30, 46, 0.88) !important;
-  color: #9aa6b2;
-}
-
-html[data-color-mode="dark"] .leaflet-control-attribution a {
-  color: #2dd4bf;
-}
-
-html[data-color-mode="dark"] .leaflet-popup-content-wrapper,
-html[data-color-mode="dark"] .leaflet-popup-tip {
-  background: #151e2e;
-  color: #e8eef7;
 }

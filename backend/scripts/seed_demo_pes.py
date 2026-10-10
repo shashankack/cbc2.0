@@ -4,12 +4,10 @@ Creates (or updates) college, campus, domain, settings, buses, and drivers.
 Does NOT import students or run planning — upload the CSV yourself.
 
 Demo sizing (after import + planning on RING):
-  - ~150 students in 15 city pockets (10 each): Banaswadi, Ramamurthy Nagar,
-    JP Nagar, Hoskote, Yelahanka, Jayanagar, Tumkur Road, Vijayanagar,
-    Basavanagudi, Kengeri, Jnanabharathi, Bangalore University, RR Nagar,
-    Banashankari, BTM Layout
-  - 6 available buses @ capacity 30 (180 seats)
-  - planning packs neighborhood stops into multi-stop routes back to RING depot
+  - 150 students in 3 corridors × 5 neighborhood pickups (10 each)
+    West (Kengeri→Hosakerehalli), South (BTM→Girinagar), North (Magadi→Mysore Rd)
+  - 7 available buses @ capacity 55 (385 seats; ~3 used for routes, rest spare)
+  - expect 3 multi-stop routes (about 5 pickups each) back to RING depot
 
 Usage (from backend/, venv active):
   python scripts/seed_demo_pes.py
@@ -76,15 +74,18 @@ DRIVER_EMAILS = (
     ("driver4@pes.edu", "PES Driver 4"),
     ("driver5@pes.edu", "PES Driver 5"),
     ("driver6@pes.edu", "PES Driver 6"),
+    ("driver7@pes.edu", "PES Driver 7"),
 )
-# ~150 students / capacity 30 → up to 6 packed routes (city-wide pockets).
+# 150 students / 3 corridors ≈ 50 per route → capacity 55 fills one bus per corridor.
+# Extra buses stay available for disruption / emergency demos.
 BUS_SPECS = (
-    ("KA01PE1001", 30, "driver@pes.edu"),
-    ("KA01PE1002", 30, "driver2@pes.edu"),
-    ("KA01PE1003", 30, "driver3@pes.edu"),
-    ("KA01PE1004", 30, "driver4@pes.edu"),
-    ("KA01PE1005", 30, "driver5@pes.edu"),
-    ("KA01PE1006", 30, "driver6@pes.edu"),
+    ("KA01PE1001", 55, "driver@pes.edu"),
+    ("KA01PE1002", 55, "driver2@pes.edu"),
+    ("KA01PE1003", 55, "driver3@pes.edu"),
+    ("KA01PE1004", 55, "driver4@pes.edu"),
+    ("KA01PE1005", 55, "driver5@pes.edu"),
+    ("KA01PE1006", 55, "driver6@pes.edu"),
+    ("KA01PE1007", 55, "driver7@pes.edu"),
 )
 
 FIXTURE_CSV = Path(__file__).resolve().parent / "fixtures" / "pes_ring_road_students.csv"
@@ -341,9 +342,9 @@ def main() -> None:
     print(f"  Admin:    {ADMIN_EMAIL}")
     print(f"  Drivers:  {', '.join(e for e, _ in DRIVER_EMAILS)}")
     print(f"  Buses:    {bus_label}")
-    print("  Expected after import+plan: multi-stop routes from city pockets -> RING")
+    print("  Expected after import+plan: 3 routes × ~5 pickups (West / South / North)")
     print()
-    print("Manual import CSV (15 Bangalore neighborhood pockets):")
+    print("Manual import CSV (3 corridors × 5 pickups × 10 students):")
     print(f"  {FIXTURE_CSV}")
     print(f"  ({sum(1 for _ in FIXTURE_CSV.open(encoding='utf-8')) - 1} students)")
     print()
@@ -352,11 +353,11 @@ def main() -> None:
     print()
     print("Steps:")
     print(f"  1. Login as {ADMIN_EMAIL} (OTP in uvicorn log)")
-    print("  2. Admin -> Import")
+    print("  2. Admin -> Upload students")
     print(f"  3. Select campus {CAMPUS_CODE} ({campus_id})")
     print("  4. Upload the CSV above")
-    print("  5. Continue to Planning (or Admin -> Planning)")
-    print("  6. Run clustering / assignment, then Confirm")
+    print("  5. Continue to Plan routes")
+    print("  6. Build draft routes, then Lock in routes")
 
 
 if __name__ == "__main__":

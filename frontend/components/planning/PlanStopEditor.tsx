@@ -91,9 +91,10 @@ export function PlanStopEditor({
   return (
     <Stack spacing={2}>
       <Stack spacing={0.5}>
-        <Typography variant="subtitle2">Fix this proposal</Typography>
+        <Typography variant="subtitle2">Adjust this draft</Typography>
         <Typography variant="body2" color="text.secondary">
-          Choose one action. Reorder pickups with ↑ ↓ on each route below.
+          Pick one change at a time. To reorder pickups, use ↑ ↓ on each bus
+          below.
         </Typography>
       </Stack>
 
@@ -104,22 +105,22 @@ export function PlanStopEditor({
         onChange={(_, next: PlanEditMode | "") =>
           onModeChange(next === "" ? null : next)
         }
-        aria-label="Proposal edit action"
+        aria-label="How to change the draft plan"
       >
-        <ToggleButton value="place">Place a stop</ToggleButton>
-        <ToggleButton value="combine">Combine stops</ToggleButton>
-        <ToggleButton value="split">Split a stop</ToggleButton>
+        <ToggleButton value="place">Add a pickup</ToggleButton>
+        <ToggleButton value="combine">Merge pickups</ToggleButton>
+        <ToggleButton value="split">Split a pickup</ToggleButton>
       </ToggleButtonGroup>
 
       {mode === "place" ? (
         <Stack spacing={1.5}>
           <Alert severity="info">
-            Click the map to drop the pickup pin
-            {draftLabel ? ` · pinned at ${draftLabel}` : " · no pin yet"}.
+            Tap the map to place the new pickup
+            {draftLabel ? ` · pin set at ${draftLabel}` : " · no pin yet"}.
           </Alert>
           <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5}>
             <TextField
-              label="Stop name"
+              label="Pickup name"
               size="small"
               value={stopName}
               onChange={(e) => onStopNameChange(e.target.value)}
@@ -129,11 +130,11 @@ export function PlanStopEditor({
             <TextField
               select
               size="small"
-              label="Add to route"
+              label="Which bus route?"
               value={routeId}
               onChange={(e) => onRouteIdChange(e.target.value)}
               fullWidth
-              helperText="Required — new stop is appended on that bus route"
+              helperText="The new stop is added to the end of this route"
             >
               {routes.map((r) => (
                 <MenuItem key={r.id} value={r.id}>
@@ -147,7 +148,7 @@ export function PlanStopEditor({
               onClick={onCreateStop}
               sx={{ whiteSpace: "nowrap", alignSelf: { sm: "flex-start" } }}
             >
-              Create stop
+              Add pickup
             </Button>
           </Stack>
         </Stack>
@@ -156,14 +157,14 @@ export function PlanStopEditor({
       {mode === "combine" ? (
         <Stack spacing={1.5}>
           <Alert severity="info">
-            Move every student from the first stop into the second, then remove
-            the empty stop from the routes.
+            Move everyone from the first pickup to the second, then remove the
+            empty stop from the routes.
           </Alert>
           <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5}>
             <TextField
               select
               size="small"
-              label="Empty this stop"
+              label="Close this pickup"
               value={absorbStopId}
               onChange={(e) => onAbsorbStopIdChange(e.target.value)}
               fullWidth
@@ -177,7 +178,7 @@ export function PlanStopEditor({
             <TextField
               select
               size="small"
-              label="Merge into"
+              label="Move everyone to"
               value={intoStopId}
               onChange={(e) => onIntoStopIdChange(e.target.value)}
               fullWidth
@@ -196,7 +197,7 @@ export function PlanStopEditor({
               onClick={onCombine}
               sx={{ whiteSpace: "nowrap", alignSelf: { sm: "flex-start" } }}
             >
-              Combine
+              Merge pickups
             </Button>
           </Stack>
         </Stack>
@@ -205,13 +206,13 @@ export function PlanStopEditor({
       {mode === "split" ? (
         <Stack spacing={1.5}>
           <Alert severity="info">
-            Move some students off a crowded stop onto a new nearby pickup
-            (placed just beside the original unless you click the map).
+            Move some students from a busy pickup to a new stop nearby (placed
+            next to the original unless you tap the map).
           </Alert>
           <TextField
             select
             size="small"
-            label="Crowded stop"
+            label="Busy pickup"
             value={splitStopId}
             onChange={(e) => onSplitStopIdChange(e.target.value)}
             fullWidth
@@ -225,12 +226,12 @@ export function PlanStopEditor({
           {splitStopId ? (
             studentsOnSplitStop.length === 0 ? (
               <Typography variant="body2" color="text.secondary">
-                No students on this stop.
+                No students at this pickup.
               </Typography>
             ) : (
               <FormGroup>
                 <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5 }}>
-                  Students to move to the new stop
+                  Students who should use the new pickup
                 </Typography>
                 {studentsOnSplitStop.map((st) => (
                   <FormControlLabel
@@ -256,7 +257,7 @@ export function PlanStopEditor({
           ) : null}
           <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5}>
             <TextField
-              label="New stop name"
+              label="Name for the new pickup"
               size="small"
               value={stopName}
               onChange={(e) => onStopNameChange(e.target.value)}
@@ -273,7 +274,7 @@ export function PlanStopEditor({
               onClick={onSplit}
               sx={{ whiteSpace: "nowrap", alignSelf: { sm: "flex-start" } }}
             >
-              Split off selected
+              Create new pickup
             </Button>
           </Stack>
           {draftLabel ? (

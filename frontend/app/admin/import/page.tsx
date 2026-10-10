@@ -104,10 +104,10 @@ export default function AdminImportPage() {
   }
 
   return (
-    <PortalShell title="College admin" description="Excel / CSV intake" nav={nav}>
+    <PortalShell title="College admin" description="Upload student home locations" nav={nav}>
       <PageHeader
-        title="Student import"
-        description="CSV/XLSX columns: name, srn, email, lat, lng. Import to the campus that also has available buses before planning."
+        title="Upload students"
+        description="Upload a spreadsheet (Excel or CSV) with columns for name, student ID (SRN), email, and home map location. Upload to the same campus that has ready buses, then plan routes."
       />
       {error ? (
         <Alert severity="error" sx={{ mb: 2 }}>
@@ -116,7 +116,7 @@ export default function AdminImportPage() {
       ) : null}
       <Stack spacing={3}>
         <SectionCard
-          title="Active student batches"
+          title="Student lists you’ve uploaded"
           actions={
             <TextField
               select
@@ -126,20 +126,21 @@ export default function AdminImportPage() {
               onChange={(e) => setActiveOnly(e.target.value === "active")}
               sx={{ minWidth: 160 }}
             >
-              <MenuItem value="active">Active only</MenuItem>
-              <MenuItem value="all">All batches</MenuItem>
+              <MenuItem value="active">Ready to plan</MenuItem>
+              <MenuItem value="all">Everything</MenuItem>
             </TextField>
           }
         >
           <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-            Active = completed import with students not yet locked by a confirmed
-            planning run. Use these batches when generating routes.
+            “Ready to plan” means the upload finished and those students are not
+            yet locked into a confirmed route plan. Use those lists when you build
+            routes.
           </Typography>
           {batches.length === 0 ? (
             <Alert severity="info">
               {activeOnly
-                ? "No active batches yet. Upload a file below, or switch to All batches."
-                : "No import batches for this college yet."}
+                ? "No lists ready to plan yet. Upload a file below, or show Everything."
+                : "No student uploads for this college yet."}
             </Alert>
           ) : (
             <TableContainer>
@@ -150,9 +151,9 @@ export default function AdminImportPage() {
                     <TableCell>File</TableCell>
                     <TableCell>Campus</TableCell>
                     <TableCell>Status</TableCell>
-                    <TableCell align="right">Valid</TableCell>
-                    <TableCell align="right">Active</TableCell>
-                    <TableCell align="right">Locked</TableCell>
+                    <TableCell align="right">OK rows</TableCell>
+                    <TableCell align="right">Still open</TableCell>
+                    <TableCell align="right">Locked in</TableCell>
                     <TableCell align="right">Actions</TableCell>
                   </TableRow>
                 </TableHead>
@@ -172,9 +173,9 @@ export default function AdminImportPage() {
                         <Stack spacing={0.5}>
                           <StatusChip status={b.status} />
                           {b.is_active ? (
-                            <StatusChip status="available" label="active pool" />
+                            <StatusChip status="available" label="Ready to plan" />
                           ) : b.status === "completed" ? (
-                            <StatusChip status="confirmed" label="fully locked" />
+                            <StatusChip status="confirmed" label="Routes locked" />
                           ) : null}
                         </Stack>
                       </TableCell>
@@ -201,17 +202,17 @@ export default function AdminImportPage() {
           )}
         </SectionCard>
 
-        <SectionCard title="Upload file">
+        <SectionCard title="Upload a spreadsheet">
           <Stack spacing={2}>
             <TextField
               select
-              label="Campus"
+              label="Campus for these students"
               value={campusId}
               onChange={(e) => setCampusId(e.target.value)}
               helperText={
                 campuses.length
-                  ? "Students and buses must share this campus for planning."
-                  : "Create a campus first"
+                  ? "Students must be uploaded to the same campus as the buses you’ll use."
+                  : "Add a campus on the Home page first"
               }
               fullWidth
             >
@@ -222,7 +223,7 @@ export default function AdminImportPage() {
               ))}
             </TextField>
             <Button variant="outlined" component="label" sx={{ alignSelf: "flex-start" }}>
-              Choose file
+              Choose spreadsheet
               <input
                 hidden
                 type="file"
@@ -231,7 +232,7 @@ export default function AdminImportPage() {
               />
             </Button>
             <Typography variant="body2" color="text.secondary">
-              {file?.name ?? "No file selected"}
+              {file?.name ?? "No file chosen yet"}
             </Typography>
             <Button
               variant="contained"
@@ -239,12 +240,12 @@ export default function AdminImportPage() {
               disabled={!file || !campusId}
               sx={{ alignSelf: "flex-start" }}
             >
-              Upload
+              Upload students
             </Button>
           </Stack>
         </SectionCard>
         {batch ? (
-          <SectionCard title="Import result">
+          <SectionCard title="Upload result">
             <ImportResultSummary
               validCount={batch.valid_count}
               invalidCount={batch.error_count}
@@ -255,7 +256,7 @@ export default function AdminImportPage() {
               variant="contained"
               href={`/admin/planning?campusId=${batch.campus_id}&batchId=${batch.id}`}
             >
-              Continue to planning
+              Continue to plan routes
             </Button>
           </SectionCard>
         ) : null}

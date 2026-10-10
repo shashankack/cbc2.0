@@ -30,14 +30,14 @@ import type { Bus, Campus, Driver } from "@/types/api";
 
 /** Admin-settable fleet statuses (in_service is trip-managed). */
 const ADMIN_BUS_STATUSES = [
-  { value: "available", label: "Available" },
-  { value: "unavailable", label: "Unavailable (maintenance)" },
+  { value: "available", label: "Ready to use" },
+  { value: "unavailable", label: "Out of service (maintenance)" },
 ] as const;
 
 function statusLabel(status: string): string {
-  if (status === "unavailable") return "Unavailable (maintenance)";
-  if (status === "in_service") return "In service";
-  if (status === "available") return "Available";
+  if (status === "unavailable") return "Out of service (maintenance)";
+  if (status === "in_service") return "On a trip";
+  if (status === "available") return "Ready to use";
   return status.replaceAll("_", " ");
 }
 
@@ -201,10 +201,10 @@ export default function AdminBusesPage() {
   const inServiceCount = buses.filter((b) => b.status === "in_service").length;
 
   return (
-    <PortalShell title="College admin" description="Fleet capacity" nav={[...ADMIN_NAV]}>
+    <PortalShell title="College admin" description="Buses, seats, and drivers" nav={[...ADMIN_NAV]}>
       <PageHeader
         title="Buses"
-        description="Manage capacity, maintenance availability, and driver assignment. One driver maps to one bus."
+        description="Add each bus, how many students it can carry, and which driver runs it. One driver per bus."
         actions={
           <Button href="/admin/drivers" variant="outlined">
             Manage drivers
@@ -218,25 +218,25 @@ export default function AdminBusesPage() {
       ) : null}
 
       <Stack spacing={3}>
-        <SectionCard title="Fleet">
+        <SectionCard title="Your buses">
           {buses.length === 0 ? (
             <EmptyState
               title="No buses yet"
-              description="Add a registration number, capacity, and optional driver."
+              description="Add a number plate, seat count, and optionally a driver."
             />
           ) : (
             <Stack spacing={2}>
               <Typography variant="body2" color="text.secondary">
-                {availableCount} available · {unavailableCount} unavailable
-                (maintenance) · {inServiceCount} in service
+                {availableCount} ready · {unavailableCount} out of service ·{" "}
+                {inServiceCount} on a trip
               </Typography>
               <TableContainer>
                 <Table size="small">
                   <TableHead>
                     <TableRow>
-                      <TableCell>Registration</TableCell>
+                      <TableCell>Number plate</TableCell>
                       <TableCell>Campus</TableCell>
-                      <TableCell>Capacity</TableCell>
+                      <TableCell>Seats</TableCell>
                       <TableCell>Availability</TableCell>
                       <TableCell>Driver</TableCell>
                       <TableCell align="right">Actions</TableCell>
@@ -279,7 +279,7 @@ export default function AdminBusesPage() {
                               <TextField
                                 select
                                 size="small"
-                                label="Status"
+                                label="Availability"
                                 value={selectValue}
                                 onChange={(e) =>
                                   setDrafts((prev) => ({
@@ -293,8 +293,8 @@ export default function AdminBusesPage() {
                                 fullWidth
                                 helperText={
                                   b.status === "in_service"
-                                    ? "Trip is active; you can still mark unavailable."
-                                    : "Unavailable = maintenance / not in fleet"
+                                    ? "This bus is on a trip; you can still mark it out of service."
+                                    : "Out of service means maintenance or not in use"
                                 }
                               >
                                 {b.status === "in_service" ? (
@@ -319,7 +319,7 @@ export default function AdminBusesPage() {
                                   disabled={rowBusy}
                                   onClick={() => void proposeDisruption(b)}
                                 >
-                                  Disrupt + propose
+                                  Bus problem → reassign
                                 </Button>
                                 <Button
                                   disabled={
@@ -329,7 +329,7 @@ export default function AdminBusesPage() {
                                     void setBusStatus(b, "unavailable")
                                   }
                                 >
-                                  Mark unavailable
+                                  Mark out of service
                                 </Button>
                                 <Button
                                   disabled={
@@ -339,7 +339,7 @@ export default function AdminBusesPage() {
                                     void setBusStatus(b, "available")
                                   }
                                 >
-                                  Mark available
+                                  Mark ready
                                 </Button>
                               </ButtonGroup>
                             </Stack>
@@ -387,7 +387,7 @@ export default function AdminBusesPage() {
           )}
         </SectionCard>
 
-        <SectionCard title="Add bus">
+        <SectionCard title="Add a bus">
           <Stack spacing={2}>
             <TextField
               select
@@ -395,7 +395,7 @@ export default function AdminBusesPage() {
               value={campusId}
               onChange={(e) => setCampusId(e.target.value)}
               helperText={
-                campuses.length ? undefined : "Create a campus first"
+                campuses.length ? undefined : "Add a campus on the Home page first"
               }
               fullWidth
             >
@@ -407,13 +407,15 @@ export default function AdminBusesPage() {
             </TextField>
             <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
               <TextField
-                label="Registration"
+                label="Number plate"
+                placeholder="e.g. KA01PE1001"
                 value={registration}
                 onChange={(e) => setRegistration(e.target.value)}
                 fullWidth
               />
               <TextField
-                label="Capacity"
+                label="How many seats?"
+                placeholder="e.g. 40"
                 value={capacity}
                 onChange={(e) => setCapacity(e.target.value)}
                 fullWidth
