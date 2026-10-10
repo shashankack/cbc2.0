@@ -1,8 +1,10 @@
 # Shared UI components (UI/UX owned)
 
 **Branch:** `feat/ui-design-system`  
-**Rule:** Only the UI/UX teammate edits this folder. The project owner imports from here and must not modify files in this directory.
+**Only edit this folder** (`frontend/components/**`).
 
-Use Material UI only. No Tailwind.
+Start here: [HANDOFF_PAGES_AND_COMPONENTS.md](./HANDOFF_PAGES_AND_COMPONENTS.md)
 
-Document props, states (loading/empty/error/success), and a short usage example per component.
+- MUI only — no Tailwind  
+- Props + callbacks only — no API calls  
+- Owner wires pages in `frontend/app` and never edits this folder  

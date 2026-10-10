@@ -27,8 +27,8 @@
 7. Agent-generated docs are proposals until the project owner reviews them.
 8. Shared enums, field names and response types must not be independently redefined.
 9. UI agents may use mock data only when marked as mock; match agreed API types.
-10. The ML agent implements the agreed contract and must not modify core allocation logic.
-11. The UI/UX agent must use MUI and must not add Tailwind.
+10. There is no ML agent or ML service — do not implement ML.
+11. The UI/UX agent must use MUI, must not add Tailwind, and may edit only `frontend/components/`.
 12. Contract changes need impact analysis and owner approval.
 13. Stay on the assigned branch; do not touch unrelated modules.
 14. If a dependency interface is missing, define a small mock contract and document it.
@@ -50,8 +50,10 @@
 
 - Frontend: Next.js + TypeScript + MUI (not Tailwind)
 - Backend: FastAPI + SQLAlchemy + Alembic + PostgreSQL
-- Optional: separate ML demand-prediction service
+- **No heavy ML models.** QR boarding/attendance is in scope. Planning uses Excel import + clustering + rule-based bus assignment.
+- Student pick/drop is locked after admin confirms a planning batch.
 - Do not introduce Redis, Celery, Kafka, GraphQL, a second ORM, or another UI framework without owner approval.
+- UI/UX edits only `frontend/components/`; owner must not edit that folder.
 
 <!-- BEGIN ADCE -->
 ## ADCE

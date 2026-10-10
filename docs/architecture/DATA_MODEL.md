@@ -1,42 +1,30 @@
 # Data model (draft)
 
-Use UUIDs or another consistent non-guessable identifier strategy. Every tenant-owned table should carry `college_id` where appropriate.
+Use UUIDs. Tenant-owned tables carry `college_id`.
 
 ## Suggested entities
 
-- `colleges`
-- `college_domains`
-- `users`
-- `college_memberships`
-- `otp_challenges`
-- `college_applications`
-- `campuses`
-- `campus_settings`
-- `buses`
-- `routes`
-- `stops`
-- `route_stops`
-- `student_preferences`
-- `allocations`
-- `allocation_runs`
-- `allocation_run_items`
-- `trips`
-- `trip_qr_tokens`
-- `boarding_records`
+- `colleges`, `college_domains`, `users`, `college_memberships`, `otp_challenges`, `college_applications`
+- `campuses`, `campus_settings` (max walk, cluster `eps_m`, `min_samples`, etc.)
+- `buses`, `routes`, `stops`, `route_stops`
+- `students` (SRN, email, locked stop/route after confirm)
+- `student_import_batches`, `student_import_rows`
+- `planning_runs` (cluster/route/bus proposals), `planning_run_items`
+- `allocations` (confirmed seat/route/stop assignment)
+- `trips` (status: e.g. `scheduled` / `active` / `ended`; `started_at` / `ended_at`; ended only via driver action)
+- `trip_qr_tokens`, `boarding_records` (attendance)
+- `trip_location_pings` (or last-known fields on `trips`: lat, lng, recorded_at) — **driver device only**, while trip is active
+- `distress_events` (trip_id, bus_id, lat, lng, recorded_at, status)
+- `emergency_reallocations` / reassignment proposals linked to distress (suggested buses, remaining students/stops, admin confirm)
 - `audit_logs`
 
 ## Important constraints
 
-- Normalized email uniqueness.
-- College slug uniqueness.
-- Exact active domain uniqueness.
-- Unique route stop sequence within a route.
-- Bus registration uniqueness within college/campus scope.
-- One active allocation per student in the defined allocation scope.
-- Unique `(college_id, campus_id)` campus setting.
-- Campus must belong to the same college as its setting.
-- A campus must have a valid walking-distance setting before allocation is enabled.
-- Capacity must be enforced transactionally.
-- Unique `(trip_id, student_id)` boarding record.
+- Unique SRN / email within college scope as defined.
+- One active locked stop/route assignment per student per planning period.
+- Capacity enforced transactionally on confirm.
+- Unique `(trip_id, student_id)` boarding/attendance.
+- A trip accepts boarding scans only while `active`; after manual end, scans are rejected.
+- Outliers may sit in `needs_admin_review` until resolved.
 
-Authoritative schema detail lands in Stage 3. Do not implement conflicting schemas elsewhere.
+See [ROUTING_AND_CLUSTERING.md](./ROUTING_AND_CLUSTERING.md).

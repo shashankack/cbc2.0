@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://college-bus.local/schemas/entities.schema.json",
   "title": "CollegeBusCoreEntities",
-  "description": "Draft entity inventory for Stage 3. Canonical narrative: docs/architecture/DATA_MODEL.md",
+  "description": "Draft entity inventory. Canonical: docs/architecture/DATA_MODEL.md. No ML entities.",
   "type": "object",
   "properties": {
     "entities": {
@@ -22,23 +22,24 @@
           "routes",
           "stops",
           "route_stops",
-          "student_preferences",
+          "students",
+          "student_import_batches",
+          "student_import_rows",
+          "planning_runs",
+          "planning_run_items",
           "allocations",
-          "allocation_runs",
-          "allocation_run_items",
           "trips",
           "trip_qr_tokens",
           "boarding_records",
+          "trip_location_pings",
+          "distress_events",
+          "emergency_reallocations",
           "audit_logs"
         ]
       }
     },
-    "identifier_strategy": {
-      "const": "uuid"
-    },
-    "tenancy": {
-      "const": "college_id on tenant-owned tables"
-    }
+    "identifier_strategy": { "const": "uuid" },
+    "tenancy": { "const": "college_id on tenant-owned tables" }
   },
   "required": ["entities", "identifier_strategy", "tenancy"]
 }

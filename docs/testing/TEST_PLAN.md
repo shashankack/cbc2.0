@@ -1,35 +1,18 @@
 # Test plan
 
-Minimum coverage areas (see requirements §14):
+## Auth and tenancy
+- OTP expiry/reuse; throttling; unapproved domain blocked; cross-college blocked
 
-## Authentication and tenancy
+## Planning
+- Excel validation; clustering; outliers snap or needs_admin_review; no micro-routes for 1–2 students
+- Atomic plan confirm; pickups locked
 
-- OTP expiry and reuse rejected
-- OTP attempt throttling
-- Unapproved domain cannot authenticate into a college
-- Cross-college access blocked
-- Users cannot self-grant roles
+## Disruption and distress
+- Unavailable bus → proposal
+- Distress captures coords; boarded vs remaining; available bus plan; admin quick-confirm
 
-## Campus and stop matching
+## Trips
+- Driver start/end required; QR only while active; boarding unique; location pings only while active; stop after end
 
-- Missing walking-distance setting blocks allocation
-- Campus settings do not leak across campuses
-- Map clicks do not create stops
-- Invalid coordinates handled
-
-## Allocation
-
-- Capacity never exceeded
-- Scarcity-first ordering is deterministic
-- Admin confirmation revalidates and is atomic
-
-## Disruption and boarding
-
-- Bus failure creates a proposal, not silent reassignment
-- QR expiry / wrong trip / duplicates rejected
-- Boarding uniqueness on `(trip_id, student_id)`
-
-## ML
-
-- Missing ML service does not break core features
-- Synthetic output clearly labelled
+## Out of scope
+- ML / demand prediction

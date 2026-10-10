@@ -2,7 +2,7 @@
 ## Project Requirements, Repository Plan, and Cursor Agent Instructions
 
 **Project type:** 24-hour hackathon prototype  
-**Status:** Scope locked for implementation  
+**Status:** Scope revised — Excel clustering routes + QR boarding; no heavy ML  
 **Primary owner:** Core application development and integration  
 **Frontend UI library:** Material UI (MUI), not Tailwind CSS
 
@@ -10,15 +10,15 @@
 
 ## 1. Project summary
 
-Build a web-based platform that helps colleges manage bus routes, stops, seat capacity, student route preferences, seat allocation, bus disruptions, and boarding confirmation.
+Build a web-based platform that helps colleges plan dynamic bus routes from student home/PG locations, allocate buses by capacity, handle disruptions, and confirm boarding via driver QR sessions.
 
-The platform supports multiple colleges. Each college has isolated data, its own administrators, one or more campuses, buses, routes, stops, and campus-specific pickup-distance settings. Students sign in using email OTP on a domain configured and approved for their college.
+The platform supports multiple colleges. Admins import students from Excel (name, SRN, academic email, coordinates). The system clusters nearby locations into centroid pick/drop stops, assembles routes, and assigns buses with **rule-based** logic. After admin confirmation, student pick/drop is **locked**. Drivers start a trip session; students scan a QR to mark attendance. Heavy ML is out of scope; boarding history may support simple rule-based planning analytics later.
 
-The core allocation engine is deterministic and rule-based. A separate optional machine-learning module forecasts demand and possible seat shortages. The core application must continue to function if the ML service is unavailable.
+See [SCOPE_DECISIONS.md](./SCOPE_DECISIONS.md), [ADR 0005](../../decisions/0005-excel-clustering-routes-and-restore-qr.md), and [ROUTING_AND_CLUSTERING.md](../architecture/ROUTING_AND_CLUSTERING.md).
 
 ### One-line summary
 
-A multi-college bus management and seat allocation platform that matches students to eligible routes and available seats, with administrator-reviewed allocations and QR-based boarding confirmation.
+Admin-imported student locations → clustered stops and routes → capacity-aware bus assignment → locked pickups → QR boarding attendance, without heavy ML.
 
 ### Scope note
 
@@ -31,100 +31,96 @@ The organizers' original problem statement must be copied verbatim from the offi
 ### 2.1 Core problem features
 
 1. **Bus management**
-   - Create and manage buses.
-   - Store registration number, capacity, campus, and operational status.
+   - Create and manage buses (registration, capacity, campus, status).
    - Mark a bus unavailable when required.
 
-2. **Route and stop management**
-   - Create routes and define ordered stops.
-   - Assign one bus to one route for the MVP.
-   - Associate routes and stops with the correct college and campus.
+2. **Admin Excel student intake**
+   - Admin uploads Excel/CSV: Name, SRN, academic email, home/PG coordinates (and agreed columns).
+   - Validate rows; reject invalid coords / emails outside approved domains.
+   - Students authenticate later via email OTP on approved academic domains.
 
-3. **Student registration and route preferences**
-   - Students sign in using email OTP.
-   - Students choose their campus from the campus list configured by their college.
-   - Students can submit multiple ranked route/stop preferences.
-   - Students can choose a predefined stop or select a pickup point on a map.
+3. **Cluster → centroid stops → dynamic routes**
+   - Cluster nearby student coordinates (density clustering; DBSCAN recommended).
+   - Create centroid pick/drop stops from clusters.
+   - Assemble ordered routes from centroids for the planning batch / academic year.
+   - Admin may merge/split clusters, reorder stops, and manually add stops.
+   - After admin confirms the plan, student pick/drop is **locked** (no student self-change).
 
-4. **Capacity-aware seat allocation**
-   - Generate a batch of proposed allocations.
-   - Filter out ineligible routes/stops before scoring.
-   - Respect bus capacity and route coverage.
-   - Prioritize students with fewer eligible choices, then consider preference rank, proximity, and available capacity.
-   - This is a heuristic; do not claim it always finds a globally optimal assignment.
+4. **Sparse / outlier student handling**
+   - Never auto-create a route solely for 1–2 distant students.
+   - If within campus max walk distance of a centroid → snap to nearest stop.
+   - Else mark `needs_admin_review` (contact admin); admin may assign or create a stop manually.
 
-5. **Bus disruption and reassignment**
-   - Detect or record a bus becoming unavailable.
-   - Generate a reassignment proposal where possible.
-   - Require administrator approval before changing active assignments.
-   - Mark impacted students as disrupted while the proposal is pending.
-   - Never silently move students to a different bus or route.
+5. **Rule-based bus allocation by headcount**
+   - Assign bus(es) to a route from student count vs bus capacity using documented rules.
+   - Heuristic only; do not claim global optimality.
+   - No heavy ML models.
 
-### 2.2 Locked additions
+6. **Admin plan review and atomic confirmation**
+   - Clustering/routing/bus assignment are proposals until admin confirms.
+   - Confirm revalidates capacities and bus availability; apply atomically or not at all.
 
-6. **Multi-college platform**
-   - A shared application supports multiple college workspaces.
-   - Every tenant-owned record must be scoped to a college.
-   - Platform operator reviews and approves new college applications and appoints the initial college administrator.
+7. **Bus disruption and reassignment**
+   - Record bus unavailable → reassignment proposal → admin approval.
+   - Never silently move students for non-emergency admin actions.
 
-7. **Verified email domains**
-   - College administrators can request domain registration.
-   - Domain ownership must be proven through a DNS TXT record.
-   - Platform operator approval is also required.
-   - Match exact registered domains. Subdomains must be registered separately.
-   - Email-domain verification proves control of the mailbox/domain, not student enrollment. Do not claim it independently proves a person is a student.
+7b. **Driver distress / emergency reallocation**
+   - During an **active** trip, the driver can press a **Distress** button.
+   - On distress, the system **immediately** records: trip/bus/route, timestamp, and the **driver phone GPS coordinates**.
+   - System computes demand still needing service on that trip/route:
+     - **Already boarded** (attendance/QR marked) on the distressed bus.
+     - **Remaining pickups** — students assigned to this route/trip who have **not** boarded yet (and any policy for already-boarded passengers needing rescue).
+   - System finds **available** buses (operational, not on conflicting active trip, with usable capacity) and **dynamically proposes/allocates** replacement capacity using rule-based logic (headcount vs capacity, proximity to distress coords when useful).
+   - MVP outcome: create an **emergency reallocation plan** (one or more buses + which remaining students/stops they cover), notify college admin, and show status to driver/admin/students as appropriate.
+   - Prefer **auto-generate + admin quick-confirm** for safety; if time-critical demo needs full auto-apply, document that emergency apply is allowed only for distress and is fully audited.
+   - Distress does **not** use heavy ML; rules only.
+   - Ending or resolving distress is an admin/driver-controlled follow-up (replacement trip sessions, etc.).
 
-8. **Campus-specific configuration**
-   - A college can have multiple campuses.
-   - Each campus has its own maximum walking-distance setting.
-   - There is no global fallback distance.
-   - An active campus must have a valid setting before allocation can run.
-   - The setting is read from the database; clients cannot override it per request.
+8. **QR boarding / attendance**
+   - Assigned driver **manually starts** a trip session for their bus.
+   - Short-lived trip QR shown on driver panel while the session is active.
+   - Authenticated student scans QR → boarding/attendance marked once.
+   - Driver **must manually end** the trip session (no auto-end assumed for MVP).
+   - After the session ends: QR is invalidated; no further boarding scans accepted for that trip.
+   - Identity from session only; store token hashes; uniqueness on `(trip_id, student_id)`.
+   - Attendance data may feed simple rule-based planning analytics later (not ML models).
 
-9. **Map-based pickup matching**
-   - Use Leaflet with OpenStreetMap tiles for the map UI.
-   - For a map-selected point, find the nearest eligible existing stop in the selected campus.
-   - Do not create stops automatically from student map clicks.
-   - The stop must be covered by an eligible route and satisfy capacity/availability rules.
-   - Haversine distance may be used for MVP proximity filtering, but label it as straight-line approximation, not actual walking distance.
-   - If actual pedestrian distance is required, integrate a pedestrian routing provider separately.
+8b. **Driver stop itinerary (ordered stops)**
+   - After the route plan is **admin-finalized/confirmed**, the assigned driver can see the route’s stops in **visit order**.
+   - When the driver starts the trip session, the driver panel shows the **ordered stop list** (name/label, sequence number, map position) for that route.
+   - MVP: clear sequential checklist / list + map markers; turn-by-turn navigation is out of scope.
+   - Stop order comes from the confirmed `route_stops` sequence; driver cannot reorder the official route in MVP (admin changes require a new confirmed plan).
 
-10. **Batch allocation review**
-    - All new batch allocations are proposals until a college administrator confirms them.
-    - Confirmation must revalidate capacities, bus availability, and relevant route versions.
-    - Commit confirmation atomically. If validation fails, do not partially apply the batch.
-    - Existing active allocations must remain unchanged if a proposed batch cannot be safely committed.
+8c. **Driver live location (for students)**
+   - While a trip session is **active**, the driver app periodically shares the **driver phone** GPS position with the backend.
+   - Assigned students (and admin, as needed) can view the bus’s current position on a map in near real time.
+   - Tracking **starts** when the driver manually starts the session and **stops** when the driver manually ends it (no tracking outside an active session).
+   - **Do not** track student phones or collect continuous student location.
 
-11. **QR boarding confirmation**
-    - An authorized driver starts an active trip.
-    - A trip-specific, short-lived QR token is displayed on the driver's panel.
-    - The authenticated student scans the QR to request boarding confirmation.
-    - Backend derives student identity from the authenticated session; never trust a client-supplied student ID.
-    - Validate active trip, token expiry, token association, student's confirmed allocation, and tenant scope.
-    - Store only a hash of the QR secret/token where applicable; do not place personal information in the QR.
-    - Prevent duplicate boarding records with a database uniqueness constraint.
-    - A rotating/short-lived QR reduces sharing but does not guarantee proof of physical presence.
-    - Do not implement student GPS tracking.
+### 2.2 Platform additions
 
-12. **Optional ML demand prediction**
-    - Separate module predicts expected demand by campus, route, and time slot.
-    - Use real historical data only if it is legitimately available; otherwise use clearly labelled synthetic data.
-    - Start with a simple baseline; optionally compare a scikit-learn model such as RandomForestRegressor.
-    - Report evaluation metrics such as MAE when a valid evaluation set exists.
-    - Label synthetic-data predictions as demonstrations; do not claim real-world predictive accuracy.
-    - ML forecasts must never override hard allocation constraints.
-    - Core allocation must work if the ML service is unavailable.
+9. **Multi-college platform** — tenant isolation; operator approves colleges and appoints first admin.
+10. **Verified email domains** — DNS TXT + operator approval; exact domain match; domain ≠ enrollment proof.
+11. **Campus-specific settings** — max walk-to-stop distance, clustering parameters as configured; no client override.
+12. **Map UI (admin planning)** — Leaflet + OSM to visualize clusters, centroids, routes; label distance approximations.
 
-### 2.3 Defer unless core is complete
+### 2.3 Explicitly out of scope
 
-- Advanced multi-vehicle route optimization.
-- Turn-by-turn navigation.
-- Live bus GPS tracking.
-- Student location tracking/geofencing.
-- Traffic prediction.
-- Push/SMS notification infrastructure.
-- Native mobile applications.
-- Sophisticated ML models or claims of production-grade prediction accuracy.
+- Heavy ML / neural demand models (rule-based analytics OK).
+- Student self-serve ranked preferences or changing pick/drop after lock.
+- Student-driven map click to create stops.
+- Live traffic (any traffic-aware ETAs, congestion, or time-of-day traffic).
+- Google Maps Platform as a hard dependency for MVP.
+- MVP routing/planning uses **distance + approximate time only**.
+- Student GPS tracking / continuous student location (driver-phone tracking during active trips is in scope).
+- Turn-by-turn navigation; native apps; push/SMS (defer).
+
+### 2.4 Defer unless core is complete
+
+- Advanced multi-vehicle route optimization / true TSP solvers.
+- Live traffic integration.
+- OSRM/road-network snap of every centroid (nice-to-have after Haversine MVP).
+- Push/SMS; native mobile apps.
 
 ---
 
@@ -137,29 +133,29 @@ The organizers' original problem statement must be copied verbatim from the offi
 - Access platform-level records only through explicitly authorized operator functionality.
 
 ### College administrator
-- Manage their college's campuses, buses, routes, stops, and campus settings.
-- Configure the maximum walking distance independently for each campus.
-- Review and confirm allocation batches.
-- Approve/reject reassignment proposals.
-- View relevant operational dashboards and audit records.
+- Import students via Excel/CSV and run clustering / route proposals.
+- Manage campuses, buses, routes, stops, and campus settings (incl. max walk / cluster params).
+- Manually add or assign stops for outlier students.
+- Review and confirm planning batches; approve/reject reassignment proposals.
+- Receive and quick-confirm **distress / emergency reallocation** plans; view distress location on map.
+- View operational dashboards, attendance summaries, and audit records.
 
 ### Student
 - Authenticate through email OTP on an approved domain.
-- Select an available campus.
-- Submit and update ranked route/stop preferences.
-- View allocation status and relevant route/stop information.
-- Scan the driver's trip QR to request boarding confirmation.
+- View locked pick/drop stop, route, and bus assignment (read-only after confirm).
+- While their bus trip is active, view the **driver/bus live position** on a map (read-only).
+- Scan the driver's trip QR to mark boarding/attendance.
+- Must not be asked for continuous GPS tracking of their own device.
 
 ### Driver
 - Access only trips assigned to them.
-- Start/end an authorized trip.
-- Display or refresh a valid trip QR.
-- View the trip passenger manifest and boarding statuses.
-
-### ML service
-- Read only the data necessary for demand forecasting.
-- Return predictions and metadata.
-- Must not allocate seats, change records, or bypass authorization.
+- View the **ordered stop itinerary** for the finalized route (before and during the trip).
+- Manually start an authorized trip session (enables QR + location sharing + active itinerary view).
+- While the session is active, share device GPS to the backend on a reasonable interval.
+- Display or refresh a valid trip QR while the session is active.
+- Press **Distress** during an active trip (captures coords; triggers emergency reallocation workflow).
+- **Manually end** the trip session (required; ends QR validity and stops location sharing) when the trip concludes normally or after handoff.
+- View passenger manifest and boarding/attendance statuses.
 
 ---
 
@@ -171,7 +167,6 @@ The organizers' original problem statement must be copied verbatim from the offi
 - Material UI (MUI) for components and theming.
 - MUI Icons.
 - Leaflet and React Leaflet for maps.
-- A QR scanning library compatible with the chosen browser/mobile-camera workflow.
 - Use MUI consistently; do not add Tailwind CSS unless the project owner explicitly changes this decision.
 
 ### Core backend
@@ -186,19 +181,13 @@ The organizers' original problem statement must be copied verbatim from the offi
 - PostGIS if supported by the selected host and development environment.
 - Haversine calculation can be used as a simple MVP approximation; do not label straight-line distance as walking distance.
 
-### ML service
-- Python.
-- Pandas and NumPy.
-- scikit-learn.
-- Keep model code separate from the core allocation engine.
-
 ### Supporting tools
 - Git and GitHub.
 - Postman or equivalent API client.
 - Figma for design handoff.
 - SMTP or a transactional email provider for OTP.
 - Vercel for the Next.js frontend.
-- A Python-compatible host for FastAPI/ML.
+- A Python-compatible host for FastAPI.
 - Managed PostgreSQL hosting with PostGIS support if geospatial SQL is used.
 
 ### Stack rule
@@ -220,25 +209,23 @@ Next.js + TypeScript + MUI
 FastAPI
   ├── Authentication and authorization
   ├── College/domain onboarding
-  ├── Campus, bus, route and stop management
-  ├── Preferences and stop matching
-  ├── Rule-based allocation
-  ├── Allocation review/confirmation
-  ├── Reassignment proposals
-  ├── Trips and QR boarding
-  ├── Audit logging
-  └── Optional demand-prediction API
+  ├── Excel student import + clustering + route proposals
+  ├── Rule-based bus assignment + admin confirm
+  ├── Disruption + distress emergency reallocation
+  ├── Trips, QR, boarding/attendance
+  ├── Driver location pings (active trip)
+  └── Audit + simple attendance analytics
            |
            v
-PostgreSQL (+ PostGIS)
+PostgreSQL
 ```
 
 ### Single source of truth
 - Database records and backend business logic are authoritative.
 - Frontend validation is for usability only; backend validation is mandatory.
-- Do not duplicate allocation, authorization, capacity, tenant, or QR rules in the frontend.
+- Do not duplicate allocation, authorization, capacity, or tenant rules in the frontend.
 - Keep API contracts stable and documented.
-- ML must use an explicitly defined input/output contract.
+- **No ML service.** QR boarding, driver itinerary, driver live location, and distress are in scope.
 
 ---
 
@@ -294,14 +281,10 @@ college-bus-system/
 │   ├── tests/
 │   ├── pyproject.toml
 │   └── .env.example
-├── ml-service/
-│   ├── app/
-│   ├── tests/
-│   ├── data/
-│   ├── pyproject.toml
-│   └── README.md
 └── scripts/
 ```
+
+Note: Do **not** add an `ml-service/`. Any leftover ML folder/branch is deleted/retired.
 
 The tree is a proposed layout, not a command to create all files at once. The coding agent must present the initial setup plan first and generate setup steps incrementally.
 
@@ -309,7 +292,7 @@ The tree is a proposed layout, not a command to create all files at once. The co
 
 ## 7. Git branching and collaboration
 
-> **Superseded branch name:** The integration branch is now `main`. A separate `production` branch may be created later for deploy/release. See [BRANCHING_AND_RELEASES.md](development/BRANCHING_AND_RELEASES.md) and ADR `decisions/0003-rename-integration-branch-to-main.md`.
+> **Superseded branch name:** The integration branch is now `main`. A separate `production` branch may be created later for deploy/release. See [BRANCHING_AND_RELEASES.md](../development/BRANCHING_AND_RELEASES.md) and ADR `decisions/0003-rename-integration-branch-to-main.md`.
 
 ### Branch strategy
 
@@ -317,19 +300,17 @@ Use a protected integration branch named `main`. Create feature branches from `m
 
 Recommended branches:
 
-- `production` — integration-ready code; only merged reviewed work.
-- `feat/core-api-db` — owner: backend/database foundation, if delegated; otherwise reserve for the project owner.
-- `feat/ml-demand-forecast` — ML teammate.
-- `feat/ui-design-system` — UI/UX teammate's coded MUI components, theme, and frontend handoff.
-- `feat/demo-qa-docs` — demo data, tests, documentation, slide content and presentation support.
+- `main` — integration-ready code; only merged reviewed work.
+- `feat/ui-design-system` — UI/UX teammate; **`frontend/components/` only**.
+- `feat/demo-qa-docs` — demo data, tests, documentation, slide content.
 - `feat/<short-description>` — additional narrowly scoped work approved by the owner.
 - `fix/<short-description>` — bug fixes.
 - `docs/<short-description>` — documentation-only changes.
 
-If the project owner is building the complete application, use `production` as the integration target and keep `feat/ml-demand-forecast`, `feat/ui-design-system`, and `feat/demo-qa-docs` isolated. The owner may create short-lived branches for risky work, but must merge only after review.
+There is **no** ML feature branch.
 
 ### Branch rules
-1. No direct pushes to `production`.
+1. No direct pushes to `main`.
 2. Each teammate commits only to their assigned branch.
 3. Use pull requests even for a small hackathon.
 4. Merge only after checking the diff and running relevant tests/builds.
@@ -338,9 +319,8 @@ If the project owner is building the complete application, use `production` as t
 7. Never commit `.env`, credentials, OTP secrets, tokens, database passwords, private keys, or real student data.
 8. Keep commits small and descriptive, for example:
    - `feat: add campus settings schema`
-   - `feat: add demand forecast endpoint`
    - `ui: add admin allocation review table`
-   - `test: cover duplicate boarding scans`
+   - `test: cover allocation capacity limits`
    - `docs: add local setup guide`
 
 ### Pull request checklist
@@ -368,7 +348,7 @@ If the project owner is building the complete application, use `production` as t
 - Never trust client-supplied `college_id`, role, student ID, driver ID, allocation status, or capacity values as authorization proof.
 - Derive actor identity and role from the authenticated server-side session/token.
 - Check tenant scope on every tenant-owned read and write.
-- Do not return secret values, OTP hashes, QR token hashes, or internal credentials.
+- Do not return secret values, OTP hashes, or internal credentials.
 - Pagination/filtering should be consistent where lists can grow.
 - Add idempotency or uniqueness protection for operations that must not create duplicates.
 
@@ -409,9 +389,6 @@ Suggested entities:
 - `allocations`
 - `allocation_runs`
 - `allocation_run_items`
-- `trips`
-- `trip_qr_tokens`
-- `boarding_records`
 - `audit_logs`
 
 ### Important constraints
@@ -426,7 +403,6 @@ Suggested entities:
 - A campus must have a valid walking-distance setting before allocation is enabled.
 - Capacity must be enforced transactionally, not with a simple row-level `CHECK`.
 - Allocation confirmation must lock/revalidate the relevant capacity and route versions.
-- Unique `(trip_id, student_id)` boarding record.
 - Enforce cross-tenant/campus relationships at the database layer where practical.
 
 ---
@@ -454,15 +430,13 @@ Do not claim that this heuristic is a globally optimal solution. If tie-breaking
 ## 11. Security and privacy rules
 
 - Email OTP must have a short expiry, limited attempts, rate limits, one-time use and secure storage of the challenge/code hash where applicable.
-- Never log OTP codes, session secrets or QR token secrets.
+- Never log OTP codes or session secrets.
 - Use secure, HTTP-only cookies if cookie-based sessions are chosen; configure SameSite and CSRF protections appropriately.
 - Use HTTPS in deployed environments.
 - Apply role-based authorization and tenant scoping on every protected operation.
 - Verify college domain DNS ownership and require platform operator approval.
 - Do not infer student enrollment solely from an email-domain match.
-- QR tokens must be random, short-lived, trip-specific and revocable.
 - Derive the student from the authenticated session; reject client-supplied identity claims.
-- Prevent duplicate scans with a database uniqueness constraint and safe retry handling.
 - Record administrative changes in audit logs without recording secrets.
 - Do not implement student GPS tracking or collect continuous location.
 - Use synthetic demo data. Do not commit real student records or personal information.
@@ -485,7 +459,6 @@ Do not claim that this heuristic is a globally optimal solution. If tie-breaking
 - Use environment variables for the API base URL; provide `.env.example`.
 - Map UI must clearly distinguish a selected point from an existing stop and show the matched stop/distance result.
 - Never label straight-line distance as walking distance.
-- QR scanning UI should show clear success, duplicate, expired-token and ineligible-student states.
 
 ### UI/UX handoff contract
 The UI/UX teammate should provide:
@@ -504,35 +477,7 @@ They must not create a second design system or introduce Tailwind.
 
 ## 13. ML interface contract
 
-The ML teammate works independently in `ml-service/` and on `feat/ml-demand-forecast`.
-
-Suggested endpoint:
-
-`GET /api/v1/analytics/demand?campus_id=...&route_id=...&date=...&time_slot=...`
-
-Suggested response:
-
-```json
-{
-  "campus_id": "example-campus-id",
-  "route_id": "example-route-id",
-  "date": "2026-10-10",
-  "time_slot": "08:00-09:00",
-  "predicted_demand": 72,
-  "available_capacity": 50,
-  "estimated_shortage": 22,
-  "data_source": "synthetic_demo",
-  "model_version": "baseline-v1",
-  "metric": {
-    "name": "MAE",
-    "value": null
-  }
-}
-```
-
-All numbers above are illustrative, not real forecasts. The service must state its data source. If no valid evaluation set exists, leave the metric unavailable rather than inventing it.
-
-The core backend should call the ML module through a small client/service interface and handle timeout/unavailability gracefully. Do not make allocation dependent on ML.
+**Deleted from product.** No ML service, branch, endpoints, or dashboards. See [FEATURES.md](./FEATURES.md).
 
 ---
 
@@ -563,18 +508,10 @@ At minimum, test:
 - A failed confirmation does not partially apply a batch.
 - Unassigned students receive a reason.
 
-### Disruption and boarding
+### Disruption
 - Bus failure creates a proposal rather than silent reassignment.
-- Unauthorized drivers cannot start or modify another driver's trip.
-- Expired, revoked, wrong-trip and invalid QR tokens are rejected.
-- Students without confirmed allocation cannot board.
-- Duplicate QR scans cannot create duplicate boarding records.
-- A trip cannot accept new boarding after it ends.
-
-### ML
-- Missing ML service does not break core features.
-- Synthetic-data output is labelled clearly.
-- API response schema is validated.
+- Admin must approve before active assignments change.
+- Impacted students are marked disrupted while a proposal is pending.
 
 ---
 
@@ -611,29 +548,23 @@ Deliver migrations/models for colleges, domains, users, memberships, campuses an
 ### Stage 4 — Authentication and college onboarding
 Implement OTP request/verification, domain validation workflow, operator approval and role checks.
 
-### Stage 5 — Fleet and route setup
-Implement campus, bus, route, stop and route-stop management, plus the MUI admin screens.
+### Stage 5 — Fleet + Excel import + clustering routes
+Buses, Excel student intake, cluster→centroid→route proposals, outlier handling, admin map review.
 
-### Stage 6 — Preferences and stop matching
-Implement ranked preferences, map selection and nearest eligible existing stop matching using campus-specific settings.
+### Stage 6 — Rule-based bus assignment + atomic confirm
+Headcount vs capacity; lock student pick/drop on confirm.
 
-### Stage 7 — Allocation engine
-Implement deterministic scarcity-first proposal generation, explanations, admin review and atomic confirmation. Add tests before UI polish.
+### Stage 7 — Disruption + distress
+Non-emergency unavailable bus proposals; distress button with GPS, boarded vs remaining, emergency bus plan.
 
-### Stage 8 — Disruption workflow
-Implement bus-unavailable flow, reassignment proposals and administrator approval.
+### Stage 8 — Trips, QR, itinerary, live driver location
+Driver start/end session, ordered stops, QR attendance, driver GPS for students.
 
-### Stage 9 — Trips and QR boarding
-Implement trip lifecycle, QR token generation/expiry, passenger manifest and duplicate-proof boarding records.
+### Stage 9 — End-to-end verification
+Tests, frontend build, tenant isolation, demo workflow.
 
-### Stage 10 — ML integration
-Add the optional demand-prediction service and dashboard card. Ensure graceful fallback if the ML service is unavailable.
-
-### Stage 11 — End-to-end verification
-Run tests, build frontend, inspect tenant isolation, validate deployment configuration and test the demo workflow.
-
-### Stage 12 — Freeze and presentation
-Stop adding features. Fix critical defects, capture screenshots, rehearse the demo and prepare a backup recording.
+### Stage 10 — Freeze and presentation
+Stop features; fix critical defects; screenshots; rehearse demo.
 
 At every stage, report what is complete, what remains, commands to run, expected output, and how the human can verify it.
 
@@ -674,8 +605,8 @@ Copy this section into the repository's `AGENTS.md`.
 7. Documents generated by an agent are proposals until reviewed by the project owner. Do not silently treat a newly generated document as an approved contract.
 8. Shared enums, field names and response types must not be independently redefined by different agents.
 9. UI agents may use mock data only when explicitly marked as mock data; they must match the agreed API types.
-10. The ML agent must implement the agreed request/response contract and must not modify core allocation logic.
-11. The UI/UX agent must use MUI and must not add Tailwind.
+10. There is no ML agent or ML service. Do not implement ML features.
+11. The UI/UX agent must use MUI, must not add Tailwind, and may edit **only** `frontend/components/`.
 12. Any proposed contract change must include impact analysis and require project-owner approval before implementation.
 13. Keep work on the assigned branch. Do not touch unrelated modules.
 14. If a teammate's work depends on a missing interface, define a small interface/mock contract and document it instead of guessing.
@@ -717,40 +648,19 @@ Expected first response:
 
 These are instructions for the human to review and run, not commands for the agent to execute:
 
-```bash
-git init
-git branch -M production
-git add .
-git commit -m "chore: initialize project documentation"
-git switch -c feat/ml-demand-forecast
-git switch production
-git switch -c feat/ui-design-system
-git switch production
-git switch -c feat/demo-qa-docs
-git switch production
-```
-
-Important: create the initial documentation files and review them before the first commit. If the Git hosting provider creates a default `main` branch or initializes a README remotely, reconcile that state before running this sequence. Do not force-push or overwrite remote history without reviewing it.
-
-The project owner should create the GitHub repository, push `production`, publish the collaborator branches, and configure branch protection manually. Agents must not perform these actions.
+See [BRANCHING_AND_RELEASES.md](../development/BRANCHING_AND_RELEASES.md). Integration branch is `main`. Collaborator branches: `feat/ui-design-system`, `feat/demo-qa-docs` only.
 
 ---
 
 ## 18. Definition of done for the hackathon demo
 
-The core demo is complete when a presenter can:
+See [../testing/ACCEPTANCE_CRITERIA.md](../testing/ACCEPTANCE_CRITERIA.md). Summary:
 
-1. Show a platform operator approving a college and its verified domain.
-2. Show a college administrator configuring campuses and walking-distance settings.
-3. Add a bus, route and ordered stops.
-4. Sign in as a student and submit ranked preferences.
-5. Select a pickup location and see a suitable existing stop matched.
-6. Generate a batch allocation that respects capacity and explains its decisions.
-7. Confirm the batch as an administrator.
-8. Mark a bus unavailable and show a reassignment proposal awaiting approval.
-9. Start a trip and display its QR.
-10. Scan the QR as an eligible student and see boarding confirmed once.
-11. Show optional demand predictions with their data source clearly labelled.
-12. Demonstrate that one college cannot access another college's data.
+1. Operator approves college + domain.
+2. Admin campus settings + Excel import + cluster/route proposal on map.
+3. Outlier snap or admin review; rule-based bus assignment; atomic confirm; pickups locked.
+4. Disruption proposal; distress → coords + emergency bus plan + admin quick-confirm.
+5. Driver ordered stops; start trip; QR scan attendance; student sees live bus; driver ends session.
+6. Tenant isolation demo.
 
-If time runs short, prioritize a reliable end-to-end path over extra features. Never fake security, tenant isolation, allocation correctness or ML evaluation in the presentation.
+If time runs short, prioritize a reliable end-to-end path. Never fake security, tenant isolation, or allocation correctness.
