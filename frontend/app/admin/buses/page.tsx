@@ -128,6 +128,33 @@ export default function AdminBusesPage() {
     }
   }
 
+  async function proposeDisruption(bus: Bus) {
+    if (!collegeId) return;
+    setBusyId(bus.id);
+    try {
+      const result = await apiPost<{
+        affected_count: number;
+        emergency_reallocation_id: string | null;
+        note?: string | null;
+      }>(`/colleges/${collegeId}/buses/${bus.id}/disruption-proposal`);
+      setError(null);
+      await load(collegeId);
+      if (result.emergency_reallocation_id) {
+        window.alert(
+          `Disruption proposal created for ${result.affected_count} students. Confirm it under Emergency.`,
+        );
+      } else {
+        window.alert(result.note ?? "Bus marked unavailable.");
+      }
+    } catch (err) {
+      setError(
+        err instanceof ApiError ? err.message : "Disruption proposal failed.",
+      );
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   async function saveBus(bus: Bus) {
     if (!collegeId) return;
     const draft = drafts[bus.id];
@@ -288,6 +315,12 @@ export default function AdminBusesPage() {
                                 ))}
                               </TextField>
                               <ButtonGroup size="small" variant="outlined">
+                                <Button
+                                  disabled={rowBusy}
+                                  onClick={() => void proposeDisruption(b)}
+                                >
+                                  Disrupt + propose
+                                </Button>
                                 <Button
                                   disabled={
                                     rowBusy || b.status === "unavailable"

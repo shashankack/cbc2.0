@@ -1,17 +1,22 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Alert from "@mui/material/Alert";
 import Button from "@mui/material/Button";
 import Stack from "@mui/material/Stack";
-import TextField from "@mui/material/TextField";
+import Table from "@mui/material/Table";
+import TableBody from "@mui/material/TableBody";
+import TableCell from "@mui/material/TableCell";
+import TableContainer from "@mui/material/TableContainer";
+import TableHead from "@mui/material/TableHead";
+import TableRow from "@mui/material/TableRow";
 import Typography from "@mui/material/Typography";
 import { EmergencyReallocationCard } from "@/components/planning";
 import { ADMIN_NAV } from "@/features/admin/nav";
 import PortalShell from "@/features/shell/PortalShell";
 import { PageHeader, SectionCard, StatusChip } from "@/features/ui";
-import { apiPost, ApiError } from "@/lib/api";
+import { apiGet, apiPost, ApiError } from "@/lib/api";
 import { primaryCollegeId, resolveHomePath, useAuth } from "@/lib/auth";
 import { hasRole } from "@/lib/roles";
 
@@ -24,6 +29,9 @@ type EmergencyOut = {
   plan_json: {
     boarded_count?: number;
     remaining_count?: number;
+    kind?: string;
+    note?: string;
+    students_reassigned?: number;
     replacement_buses?: {
       bus_id: string;
       registration_number?: string;
@@ -38,10 +46,18 @@ export default function AdminEmergencyPage() {
   const router = useRouter();
   const { user, loading } = useAuth();
   const collegeId = user ? primaryCollegeId(user) : null;
-  const [reallocId, setReallocId] = useState("");
+  const [rows, setRows] = useState<EmergencyOut[]>([]);
   const [result, setResult] = useState<EmergencyOut | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [confirming, setConfirming] = useState(false);
+  const [busyId, setBusyId] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    if (!collegeId) return;
+    const proposed = await apiGet<EmergencyOut[]>(
+      `/colleges/${collegeId}/emergency-reallocations?status=proposed`,
+    );
+    setRows(proposed);
+  }, [collegeId]);
 
   useEffect(() => {
     if (loading) return;
@@ -51,27 +67,27 @@ export default function AdminEmergencyPage() {
     }
     if (!hasRole(user, "college_admin") && !user.is_platform_operator) {
       router.replace(resolveHomePath(user));
-    }
-  }, [loading, user, router]);
-
-  async function confirm(event: FormEvent) {
-    event.preventDefault();
-    if (!collegeId || !reallocId.trim()) {
-      setError("Emergency reallocation ID is required.");
       return;
     }
-    setConfirming(true);
+    void load().catch((err: unknown) => {
+      setError(err instanceof ApiError ? err.message : "Load failed.");
+    });
+  }, [loading, user, router, load]);
+
+  async function confirm(id: string) {
+    if (!collegeId) return;
+    setBusyId(id);
     setError(null);
     try {
       const row = await apiPost<EmergencyOut>(
-        `/colleges/${collegeId}/emergency-reallocations/${reallocId.trim()}/confirm`,
+        `/colleges/${collegeId}/emergency-reallocations/${id}/confirm`,
       );
       setResult(row);
+      await load();
     } catch (err) {
-      setResult(null);
       setError(err instanceof ApiError ? err.message : "Confirm failed.");
     } finally {
-      setConfirming(false);
+      setBusyId(null);
     }
   }
 
@@ -98,7 +114,7 @@ export default function AdminEmergencyPage() {
     <PortalShell title="College admin" description="Distress follow-up" nav={nav}>
       <PageHeader
         title="Emergency reallocation"
-        description="Paste the reallocation ID from the driver’s distress alert, review the suggestion, and confirm."
+        description="Open distress and disruption proposals. Confirming reassigns remaining students onto replacement buses."
         actions={result ? <StatusChip status={result.status} /> : null}
       />
       {error ? (
@@ -107,33 +123,66 @@ export default function AdminEmergencyPage() {
         </Alert>
       ) : null}
 
-      <Stack spacing={3} sx={{ maxWidth: 720 }}>
-        <SectionCard title="Confirm plan">
-          <Stack component="form" spacing={2} onSubmit={confirm}>
-            <TextField
-              label="Emergency reallocation ID"
-              value={reallocId}
-              onChange={(e) => setReallocId(e.target.value)}
-              fullWidth
-              required
-            />
-            <Button
-              type="submit"
-              variant="contained"
-              disabled={confirming}
-              sx={{ alignSelf: "flex-start" }}
-            >
-              {confirming ? "Confirming…" : "Confirm reallocation"}
-            </Button>
-          </Stack>
+      <Stack spacing={3}>
+        <SectionCard title="Open proposals">
+          {rows.length === 0 ? (
+            <Alert severity="info">No proposed reallocations right now.</Alert>
+          ) : (
+            <TableContainer>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>ID</TableCell>
+                    <TableCell>Kind</TableCell>
+                    <TableCell align="right">Remaining</TableCell>
+                    <TableCell align="right">Buses</TableCell>
+                    <TableCell align="right">Actions</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {rows.map((r) => (
+                    <TableRow key={r.id} hover>
+                      <TableCell sx={{ fontFamily: "monospace", fontSize: 12 }}>
+                        {r.id.slice(0, 8)}…
+                      </TableCell>
+                      <TableCell>
+                        {r.plan_json.kind === "disruption"
+                          ? "Disruption"
+                          : "Distress"}
+                      </TableCell>
+                      <TableCell align="right">
+                        {r.plan_json.remaining_count ?? "—"}
+                      </TableCell>
+                      <TableCell align="right">
+                        {r.plan_json.replacement_buses?.length ?? 0}
+                      </TableCell>
+                      <TableCell align="right">
+                        <Button
+                          size="small"
+                          variant="contained"
+                          disabled={busyId === r.id}
+                          onClick={() => void confirm(r.id)}
+                        >
+                          {busyId === r.id ? "Applying…" : "Confirm & apply"}
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          )}
         </SectionCard>
 
         {result ? (
-          <SectionCard title="Confirmed plan">
+          <SectionCard title="Last confirmed plan">
             <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
               Plan {result.id}
               {result.confirmed_at
                 ? ` · ${new Date(result.confirmed_at).toLocaleString()}`
+                : ""}
+              {typeof plan?.students_reassigned === "number"
+                ? ` · reassigned ${plan.students_reassigned}`
                 : ""}
             </Typography>
             <EmergencyReallocationCard

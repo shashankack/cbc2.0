@@ -456,6 +456,69 @@ def list_planning_runs(db: Session, college_id: uuid.UUID) -> list[PlanningRun]:
     )
 
 
+def assign_review_item_to_stop(
+    db: Session,
+    college_id: uuid.UUID,
+    run_id: uuid.UUID,
+    item_id: uuid.UUID,
+    *,
+    stop_id: uuid.UUID,
+    route_id: uuid.UUID | None = None,
+    bus_id: uuid.UUID | None = None,
+) -> PlanningRun:
+    """Admin resolves needs_admin_review by snapping a student onto a stop (+ optional route/bus)."""
+    run = get_planning_run(db, college_id, run_id)
+    if run.status != PlanningRunStatus.PROPOSED:
+        raise AppError(
+            "CONFLICT",
+            "Only proposed planning runs can be edited.",
+            status_code=409,
+        )
+    item = db.scalar(
+        select(PlanningRunItem).where(
+            PlanningRunItem.id == item_id,
+            PlanningRunItem.planning_run_id == run.id,
+            PlanningRunItem.college_id == college_id,
+        )
+    )
+    if item is None:
+        raise AppError("NOT_FOUND", "Planning item not found.", status_code=404)
+    stop = db.scalar(
+        select(Stop).where(
+            Stop.id == stop_id,
+            Stop.college_id == college_id,
+            Stop.planning_run_id == run.id,
+        )
+    )
+    if stop is None:
+        raise AppError("NOT_FOUND", "Stop not found on this planning run.", status_code=404)
+
+    item.stop_id = stop_id
+    if route_id is not None:
+        route = db.scalar(
+            select(Route).where(
+                Route.id == route_id,
+                Route.planning_run_id == run.id,
+                Route.college_id == college_id,
+            )
+        )
+        if route is None:
+            raise AppError("NOT_FOUND", "Route not found on this planning run.", status_code=404)
+        item.route_id = route_id
+    if bus_id is not None:
+        bus = db.get(Bus, bus_id)
+        if bus is None or bus.college_id != college_id:
+            raise AppError("NOT_FOUND", "Bus not found.", status_code=404)
+        item.bus_id = bus_id
+
+    item.status = PlanningItemStatus.SNAPPED
+    student = db.get(Student, item.student_id)
+    if student is not None:
+        student.status = StudentStatus.ALLOCATED
+    db.commit()
+    return get_planning_run(db, college_id, run.id)
+
+
 def confirm_planning_run(
     db: Session, college_id: uuid.UUID, run_id: uuid.UUID
 ) -> PlanningRun:

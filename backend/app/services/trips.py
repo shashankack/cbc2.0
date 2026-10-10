@@ -6,7 +6,7 @@ import secrets
 import uuid
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.core.errors import AppError
@@ -731,6 +731,22 @@ def raise_distress(
     return {"distress_event": event, "emergency_reallocation": realloc}
 
 
+def list_emergency_reallocations(
+    db: Session,
+    college_id: uuid.UUID,
+    *,
+    status: str | None = None,
+) -> list[EmergencyReallocation]:
+    stmt = (
+        select(EmergencyReallocation)
+        .where(EmergencyReallocation.college_id == college_id)
+        .order_by(EmergencyReallocation.created_at.desc())
+    )
+    if status:
+        stmt = stmt.where(EmergencyReallocation.status == status)
+    return list(db.scalars(stmt).all())
+
+
 def confirm_emergency(
     db: Session,
     college_id: uuid.UUID,
@@ -746,14 +762,260 @@ def confirm_emergency(
         raise AppError("NOT_FOUND", "Emergency reallocation not found.", status_code=404)
     if row.status != EmergencyPlanStatus.PROPOSED:
         raise AppError("CONFLICT", "Plan is not in proposed status.", status_code=409)
+
+    plan = row.plan_json or {}
+    remaining_ids = [uuid.UUID(s) for s in plan.get("remaining_student_ids", [])]
+    replacements = plan.get("replacement_buses") or []
+    event = db.get(DistressEvent, row.distress_event_id)
+    route_id = None
+    if event is not None:
+        trip = db.get(Trip, event.trip_id)
+        if trip is not None:
+            route_id = trip.route_id
+            # Distressed bus leaves service until admin restores it.
+            distressed_bus = db.get(Bus, trip.bus_id)
+            if distressed_bus is not None:
+                distressed_bus.status = BusStatus.UNAVAILABLE
+
+    # Pack remaining students onto proposed replacement buses by capacity.
+    next_idx = 0
+    scheduled_pairs: list[tuple[uuid.UUID, uuid.UUID]] = []
+    for bus_info in replacements:
+        if next_idx >= len(remaining_ids):
+            break
+        bus_id = uuid.UUID(str(bus_info["bus_id"]))
+        bus = db.get(Bus, bus_id)
+        if bus is None or bus.college_id != college_id:
+            continue
+        if bus.status != BusStatus.AVAILABLE:
+            continue
+        capacity = int(bus_info.get("capacity") or bus.capacity)
+        chunk = remaining_ids[next_idx : next_idx + capacity]
+        next_idx += len(chunk)
+        for sid in chunk:
+            alloc = db.scalar(
+                select(Allocation).where(
+                    Allocation.college_id == college_id,
+                    Allocation.student_id == sid,
+                )
+            )
+            if alloc is None:
+                continue
+            alloc.bus_id = bus_id
+            if route_id is not None:
+                alloc.route_id = route_id
+        if route_id is not None and chunk:
+            scheduled_pairs.append((route_id, bus_id))
+
+    if scheduled_pairs:
+        schedule_trips_for_assignments(db, college_id, scheduled_pairs)
+
+    applied = {
+        **plan,
+        "students_reassigned": next_idx,
+        "applied": True,
+    }
+    row.plan_json = applied
     row.status = EmergencyPlanStatus.CONFIRMED
     row.confirmed_at = utcnow()
-    event = db.get(DistressEvent, row.distress_event_id)
     if event is not None:
         event.status = DistressStatus.RESOLVED
     db.commit()
     db.refresh(row)
     return row
+
+
+def student_active_trip(
+    db: Session, college_id: uuid.UUID, actor: User
+) -> Trip | None:
+    """Active trip for the student's allocated bus (if running today)."""
+    alloc = my_allocation(db, college_id, actor)
+    if alloc is None:
+        return None
+    return db.scalar(
+        select(Trip)
+        .where(
+            Trip.college_id == college_id,
+            Trip.bus_id == alloc.bus_id,
+            Trip.status == TripStatus.ACTIVE,
+        )
+        .order_by(Trip.started_at.desc())
+        .limit(1)
+    )
+
+
+def attendance_analytics(db: Session, college_id: uuid.UUID) -> list[dict]:
+    """Rule-based boarded vs assigned counts per trip (no ML)."""
+    trips = list(
+        db.scalars(
+            select(Trip)
+            .where(Trip.college_id == college_id)
+            .order_by(Trip.created_at.desc())
+            .limit(50)
+        ).all()
+    )
+    rows: list[dict] = []
+    for trip in trips:
+        assigned = (
+            db.scalar(
+                select(func.count())
+                .select_from(Allocation)
+                .where(
+                    Allocation.college_id == college_id,
+                    Allocation.bus_id == trip.bus_id,
+                    Allocation.route_id == trip.route_id,
+                )
+            )
+            or 0
+        )
+        boarded = (
+            db.scalar(
+                select(func.count())
+                .select_from(BoardingRecord)
+                .where(BoardingRecord.trip_id == trip.id)
+            )
+            or 0
+        )
+        ser = serialize_trip(db, trip)
+        rows.append(
+            {
+                "trip_id": trip.id,
+                "status": trip.status,
+                "route_name": ser.get("route_name"),
+                "bus_registration": ser.get("bus_registration"),
+                "started_at": trip.started_at,
+                "ended_at": trip.ended_at,
+                "assigned_count": int(assigned),
+                "boarded_count": int(boarded),
+                "no_show_count": max(0, int(assigned) - int(boarded)),
+            }
+        )
+    return rows
+
+
+def propose_bus_disruption(
+    db: Session,
+    college_id: uuid.UUID,
+    bus_id: uuid.UUID,
+) -> dict:
+    """Non-emergency: mark bus unavailable and propose replacement for locked riders."""
+    bus = db.get(Bus, bus_id)
+    if bus is None or bus.college_id != college_id:
+        raise AppError("NOT_FOUND", "Bus not found.", status_code=404)
+    allocations = list(
+        db.scalars(
+            select(Allocation).where(
+                Allocation.college_id == college_id,
+                Allocation.bus_id == bus_id,
+            )
+        ).all()
+    )
+    if not allocations:
+        bus.status = BusStatus.UNAVAILABLE
+        db.commit()
+        return {
+            "bus_id": bus.id,
+            "status": "unavailable",
+            "affected_count": 0,
+            "replacement_buses": [],
+            "note": "Bus marked unavailable; no locked students to reassign.",
+        }
+
+    need = len(allocations)
+    available = list(
+        db.scalars(
+            select(Bus).where(
+                Bus.college_id == college_id,
+                Bus.campus_id == bus.campus_id,
+                Bus.status == BusStatus.AVAILABLE,
+                Bus.id != bus.id,
+            )
+        ).all()
+    )
+    available.sort(key=lambda b: (b.capacity < need, -b.capacity))
+    chosen: list[dict] = []
+    seats = 0
+    for alt in available:
+        if seats >= need:
+            break
+        chosen.append(
+            {
+                "bus_id": str(alt.id),
+                "registration_number": alt.registration_number,
+                "capacity": alt.capacity,
+            }
+        )
+        seats += alt.capacity
+
+    bus.status = BusStatus.UNAVAILABLE
+    plan = {
+        "kind": "disruption",
+        "source_bus_id": str(bus.id),
+        "affected_student_ids": [str(a.student_id) for a in allocations],
+        "affected_count": need,
+        "replacement_buses": chosen,
+        "seats_proposed": seats,
+        "route_id": str(allocations[0].route_id),
+        "note": "Non-emergency disruption proposal; confirm to reassign.",
+    }
+    # Store as emergency reallocation without distress via a synthetic distress event
+    # tied to an active/scheduled trip if present, else create a placeholder trip-less event.
+    trip = db.scalar(
+        select(Trip)
+        .where(
+            Trip.college_id == college_id,
+            Trip.bus_id == bus.id,
+            Trip.status.in_([TripStatus.SCHEDULED, TripStatus.ACTIVE]),
+        )
+        .order_by(Trip.created_at.desc())
+        .limit(1)
+    )
+    if trip is None:
+        db.commit()
+        return {
+            "bus_id": bus.id,
+            "status": "unavailable",
+            "affected_count": need,
+            "replacement_buses": chosen,
+            "emergency_reallocation_id": None,
+            "note": "Bus unavailable; no trip to attach — reassign manually or confirm later.",
+            "plan": plan,
+        }
+
+    event = DistressEvent(
+        college_id=college_id,
+        trip_id=trip.id,
+        bus_id=bus.id,
+        lat=trip.last_lat or 0.0,
+        lng=trip.last_lng or 0.0,
+        status=DistressStatus.OPEN,
+        recorded_at=utcnow(),
+    )
+    db.add(event)
+    db.flush()
+    realloc = EmergencyReallocation(
+        college_id=college_id,
+        distress_event_id=event.id,
+        status=EmergencyPlanStatus.PROPOSED,
+        plan_json={
+            **plan,
+            "boarded_count": 0,
+            "remaining_count": need,
+            "remaining_student_ids": plan["affected_student_ids"],
+        },
+    )
+    db.add(realloc)
+    db.commit()
+    db.refresh(realloc)
+    return {
+        "bus_id": bus.id,
+        "status": "unavailable",
+        "affected_count": need,
+        "replacement_buses": chosen,
+        "emergency_reallocation_id": realloc.id,
+        "plan": realloc.plan_json,
+        "note": "Proposal created — confirm on Emergency page.",
+    }
 
 
 def my_allocation(db: Session, college_id: uuid.UUID, actor: User) -> Allocation | None:

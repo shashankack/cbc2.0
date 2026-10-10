@@ -60,6 +60,10 @@ function AdminPlanningPageInner() {
   const [error, setError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
   const [running, setRunning] = useState(false);
+  const [assignStopByItem, setAssignStopByItem] = useState<Record<string, string>>(
+    {},
+  );
+  const [assignBusy, setAssignBusy] = useState<string | null>(null);
 
   useEffect(() => {
     if (loading) return;
@@ -159,6 +163,38 @@ function AdminPlanningPageInner() {
       setError(err instanceof ApiError ? err.message : "Confirm failed.");
     } finally {
       setConfirming(false);
+    }
+  }
+
+  async function assignReviewItem(itemId: string) {
+    if (!collegeId || !run) return;
+    const stopId = assignStopByItem[itemId];
+    if (!stopId) {
+      setError("Pick a stop for this student first.");
+      return;
+    }
+    const routeWithStop = run.routes.find((r) =>
+      r.route_stops.some((s) => s.stop_id === stopId),
+    );
+    setAssignBusy(itemId);
+    try {
+      const result = await apiPost<PlanningRun>(
+        `/colleges/${collegeId}/planning-runs/${run.id}/items/${itemId}/assign-stop`,
+        {
+          stop_id: stopId,
+          route_id: routeWithStop?.id ?? null,
+          bus_id:
+            run.items.find(
+              (i) => i.route_id === routeWithStop?.id && i.bus_id,
+            )?.bus_id ?? null,
+        },
+      );
+      setRun(result);
+      setError(null);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Assign failed.");
+    } finally {
+      setAssignBusy(null);
     }
   }
 
@@ -430,6 +466,71 @@ function AdminPlanningPageInner() {
                     </TableContainer>
                   </Stack>
                 ))}
+              </Stack>
+            ) : null}
+            {run.status === "proposed" &&
+            run.items.some((i) => i.status === "needs_admin_review") ? (
+              <Stack spacing={1.5} sx={{ mt: 2 }}>
+                <Typography variant="subtitle2">Needs admin review</Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Assign each outlier to an existing stop before confirm (optional
+                  route/bus inferred from that stop).
+                </Typography>
+                <TableContainer>
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>Student item</TableCell>
+                        <TableCell>Assign stop</TableCell>
+                        <TableCell align="right">Action</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {run.items
+                        .filter((i) => i.status === "needs_admin_review")
+                        .map((item) => (
+                          <TableRow key={item.id} hover>
+                            <TableCell sx={{ fontFamily: "monospace", fontSize: 12 }}>
+                              {item.student_id.slice(0, 8)}…
+                            </TableCell>
+                            <TableCell>
+                              <TextField
+                                select
+                                size="small"
+                                label="Stop"
+                                value={assignStopByItem[item.id] ?? ""}
+                                onChange={(e) =>
+                                  setAssignStopByItem((prev) => ({
+                                    ...prev,
+                                    [item.id]: e.target.value,
+                                  }))
+                                }
+                                fullWidth
+                              >
+                                {run.stops
+                                  .filter((s) => s.source !== "campus")
+                                  .map((s) => (
+                                    <MenuItem key={s.id} value={s.id}>
+                                      {s.name}
+                                    </MenuItem>
+                                  ))}
+                              </TextField>
+                            </TableCell>
+                            <TableCell align="right">
+                              <Button
+                                size="small"
+                                variant="outlined"
+                                disabled={assignBusy === item.id}
+                                onClick={() => void assignReviewItem(item.id)}
+                              >
+                                {assignBusy === item.id ? "Saving…" : "Assign"}
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
               </Stack>
             ) : null}
             {run.status === "proposed" ? (

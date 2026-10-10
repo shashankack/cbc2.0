@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends, Query
 from app.api.deps import CurrentUser, DbSession, require_college_admin_access
 from app.models.user import User
 from app.schemas.trips import (
+    AttendanceRowOut,
     BoardingOut,
     BoardRequest,
     DistressIn,
@@ -254,6 +255,22 @@ def distress(
     )
 
 
+@router.get(
+    "/colleges/{college_id}/emergency-reallocations",
+    response_model=list[EmergencyOut],
+)
+def list_emergencies(
+    college_id: uuid.UUID,
+    db: DbSession,
+    _admin: Annotated[User, Depends(require_college_admin_access)],
+    status: Annotated[str | None, Query()] = "proposed",
+) -> list[EmergencyOut]:
+    rows = trip_service.list_emergency_reallocations(
+        db, college_id, status=status
+    )
+    return [EmergencyOut.model_validate(r) for r in rows]
+
+
 @router.post(
     "/colleges/{college_id}/emergency-reallocations/{realloc_id}/confirm",
     response_model=EmergencyOut,
@@ -266,3 +283,32 @@ def confirm_emergency(
 ) -> EmergencyOut:
     row = trip_service.confirm_emergency(db, college_id, realloc_id)
     return EmergencyOut.model_validate(row)
+
+
+@router.get(
+    "/colleges/{college_id}/me/active-trip",
+    response_model=TripOut | None,
+)
+def my_active_trip(
+    college_id: uuid.UUID,
+    db: DbSession,
+    user: CurrentUser,
+) -> TripOut | None:
+    require_college_roles(db, user, college_id, {"student", "college_admin"})
+    trip = trip_service.student_active_trip(db, college_id, user)
+    if trip is None:
+        return None
+    return _trip_out(db, trip)
+
+
+@router.get(
+    "/colleges/{college_id}/analytics/attendance",
+    response_model=list[AttendanceRowOut],
+)
+def attendance_analytics(
+    college_id: uuid.UUID,
+    db: DbSession,
+    _admin: Annotated[User, Depends(require_college_admin_access)],
+) -> list[AttendanceRowOut]:
+    rows = trip_service.attendance_analytics(db, college_id)
+    return [AttendanceRowOut(**r) for r in rows]

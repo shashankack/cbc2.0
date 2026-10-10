@@ -10,7 +10,9 @@ from fastapi import APIRouter, Depends, Query
 from app.api.deps import DbSession, require_college_admin_access
 from app.models.user import User
 from app.schemas.fleet import BusCreate, BusOut, BusUpdate
+from app.schemas.trips import DisruptionProposalOut
 from app.services import fleet as fleet_service
+from app.services import trips as trip_service
 
 router = APIRouter(prefix="/colleges/{college_id}/buses", tags=["buses"])
 
@@ -62,3 +64,18 @@ def update_bus(
         clear_driver=body.clear_driver,
     )
     return BusOut.model_validate(fleet_service.bus_to_dict(db, row))
+
+
+@router.post(
+    "/{bus_id}/disruption-proposal",
+    response_model=DisruptionProposalOut,
+)
+def propose_disruption(
+    college_id: uuid.UUID,
+    bus_id: uuid.UUID,
+    db: DbSession,
+    _admin: Annotated[User, Depends(require_college_admin_access)],
+) -> DisruptionProposalOut:
+    """Mark bus unavailable and propose replacement capacity for locked students."""
+    result = trip_service.propose_bus_disruption(db, college_id, bus_id)
+    return DisruptionProposalOut.model_validate(result)

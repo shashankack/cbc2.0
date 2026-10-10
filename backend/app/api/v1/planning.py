@@ -13,6 +13,7 @@ from app.schemas.planning import (
     PlanningItemOut,
     PlanningRunCreate,
     PlanningRunOut,
+    ReviewItemAssign,
     RouteOut,
     RouteStopOut,
     StopOut,
@@ -115,4 +116,28 @@ def confirm_run(
     _admin: Annotated[User, Depends(require_college_admin_access)],
 ) -> PlanningRunOut:
     run = planning_service.confirm_planning_run(db, college_id, run_id)
+    return _serialize_run(run)
+
+
+@router.post(
+    "/{run_id}/items/{item_id}/assign-stop",
+    response_model=PlanningRunOut,
+)
+def assign_review_item(
+    college_id: uuid.UUID,
+    run_id: uuid.UUID,
+    item_id: uuid.UUID,
+    body: ReviewItemAssign,
+    db: DbSession,
+    _admin: Annotated[User, Depends(require_college_admin_access)],
+) -> PlanningRunOut:
+    run = planning_service.assign_review_item_to_stop(
+        db,
+        college_id,
+        run_id,
+        item_id,
+        stop_id=body.stop_id,
+        route_id=body.route_id,
+        bus_id=body.bus_id,
+    )
     return _serialize_run(run)

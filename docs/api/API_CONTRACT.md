@@ -68,7 +68,12 @@
 | GET | `/colleges/{college_id}/planning-runs` | college_admin | List runs |
 | GET | `/colleges/{college_id}/planning-runs/{run_id}` | college_admin | Run detail |
 | POST | `/colleges/{college_id}/planning-runs/{run_id}/confirm` | college_admin | Lock allocations |
+| POST | `/colleges/{college_id}/planning-runs/{run_id}/items/{item_id}/assign-stop` | college_admin | Resolve `needs_admin_review` onto a stop (+ optional route/bus) |
 | GET | `/colleges/{college_id}/me/allocation` | student/admin | Locked assignment (+ stop/route/bus labels) |
+| GET | `/colleges/{college_id}/me/active-trip` | student/admin | Active trip for the student’s allocated bus |
+| GET | `/colleges/{college_id}/emergency-reallocations` | college_admin | List plans (`?status=proposed` default) |
+| GET | `/colleges/{college_id}/analytics/attendance` | college_admin | Boarded vs assigned counts per trip |
+| POST | `/colleges/{college_id}/buses/{bus_id}/disruption-proposal` | college_admin | Mark unavailable + propose reassignment (confirm via emergency) |
 
 ### Trips / QR / location / distress
 

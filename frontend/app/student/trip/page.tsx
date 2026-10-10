@@ -14,7 +14,7 @@ import { EmptyState, PageHeader, SectionCard, StatusChip } from "@/features/ui";
 import { apiGet, ApiError } from "@/lib/api";
 import { primaryCollegeId, resolveHomePath, useAuth } from "@/lib/auth";
 import { hasRole } from "@/lib/roles";
-import type { TripLocation } from "@/types/api";
+import type { Trip, TripLocation } from "@/types/api";
 
 const LiveTripMap = dynamic(() => import("@/features/maps/LiveTripMap"), {
   ssr: false,
@@ -58,8 +58,28 @@ export default function StudentTripPage() {
     }
     if (!hasRole(user, "student") && !user.is_platform_operator) {
       router.replace(resolveHomePath(user));
+      return;
     }
-  }, [loading, user, router]);
+    if (!collegeId) return;
+    void apiGet<Trip | null>(`/colleges/${collegeId}/me/active-trip`)
+      .then(async (trip) => {
+        if (!trip?.id) return;
+        setTripId(trip.id);
+        const stops = await apiGet<ItineraryStop[]>(
+          `/colleges/${collegeId}/trips/${trip.id}/itinerary`,
+        );
+        setItinerary(stops);
+        setActiveTripId(trip.id);
+        setWatching(true);
+        const loc = await apiGet<TripLocation>(
+          `/colleges/${collegeId}/trips/${trip.id}/location`,
+        );
+        setLocation(loc);
+      })
+      .catch(() => {
+        /* no active trip yet */
+      });
+  }, [loading, user, router, collegeId]);
 
   useEffect(() => {
     if (!collegeId || !activeTripId || !watching) return;
@@ -132,7 +152,7 @@ export default function StudentTripPage() {
     <PortalShell title="Student" description="Live bus position" nav={NAV}>
       <PageHeader
         title="Live bus map"
-        description="Enter the active trip ID from your driver. Position updates while the session is active."
+        description="Auto-tracks your bus when its trip is active. You can also paste a trip ID."
         actions={location ? <StatusChip status={location.status} /> : null}
       />
       {error ? (

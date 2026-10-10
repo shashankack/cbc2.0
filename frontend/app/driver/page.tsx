@@ -15,6 +15,7 @@ import {
 } from "@/components/trips";
 import PortalShell from "@/features/shell/PortalShell";
 import { EmptyState, PageHeader, SectionCard, StatusChip } from "@/features/ui";
+import { boardingQrImageUrl, encodeBoardingQr } from "@/features/trips/boardingQr";
 import { apiGet, apiPost, ApiError } from "@/lib/api";
 import { primaryCollegeId, resolveHomePath, useAuth } from "@/lib/auth";
 import { hasRole } from "@/lib/roles";
@@ -95,6 +96,41 @@ export default function DriverPage() {
     }
     void loadDuty();
   }, [loading, user, router, loadDuty]);
+
+  // Continuous GPS while trip is active.
+  useEffect(() => {
+    if (!collegeId || !trip || trip.status !== "active") return;
+    if (typeof navigator === "undefined" || !navigator.geolocation) return;
+
+    const send = (lat: number, lng: number) => {
+      void apiPost(`/colleges/${collegeId}/trips/${trip.id}/location`, {
+        lat,
+        lng,
+      }).catch(() => {
+        /* ignore transient GPS post failures */
+      });
+    };
+
+    const watchId = navigator.geolocation.watchPosition(
+      (pos) => send(pos.coords.latitude, pos.coords.longitude),
+      () => {
+        /* permission denied / unavailable */
+      },
+      { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 },
+    );
+    const interval = window.setInterval(() => {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => send(pos.coords.latitude, pos.coords.longitude),
+        () => undefined,
+        { maximumAge: 10000, timeout: 10000 },
+      );
+    }, 12000);
+
+    return () => {
+      navigator.geolocation.clearWatch(watchId);
+      window.clearInterval(interval);
+    };
+  }, [collegeId, trip]);
 
   // If already active after refresh, restore QR + itinerary.
   useEffect(() => {
@@ -273,9 +309,33 @@ export default function DriverPage() {
               />
             </SectionCard>
 
-            {qrToken && sessionStatus === "active" ? (
+            {qrToken && trip && sessionStatus === "active" ? (
               <SectionCard title="Boarding QR">
-                <TripQrPanel status="active" qrValue={qrToken} />
+                <TripQrPanel
+                  status="active"
+                  qrValue={encodeBoardingQr({
+                    trip_id: trip.id,
+                    qr_token: qrToken,
+                  })}
+                  qrImageUrl={boardingQrImageUrl({
+                    trip_id: trip.id,
+                    qr_token: qrToken,
+                  })}
+                  onRefresh={() => {
+                    void apiPost<{ qr_token: string }>(
+                      `/colleges/${collegeId}/trips/${trip.id}/qr/refresh`,
+                    )
+                      .then((r) => setQrToken(r.qr_token))
+                      .catch((err: unknown) => {
+                        setError(
+                          err instanceof ApiError
+                            ? err.message
+                            : "QR refresh failed.",
+                        );
+                      });
+                  }}
+                  caption="Students scan this QR (or paste the payload) while the session is active."
+                />
               </SectionCard>
             ) : null}
 

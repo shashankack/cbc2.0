@@ -15,6 +15,12 @@ class PlanningRunCreate(BaseModel):
     import_batch_id: UUID | None = None
 
 
+class ReviewItemAssign(BaseModel):
+    stop_id: UUID
+    route_id: UUID | None = None
+    bus_id: UUID | None = None
+
+
 class StopOut(ORMModel):
     id: UUID
     name: str
