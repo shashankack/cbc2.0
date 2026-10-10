@@ -13,7 +13,7 @@ from app.core.security import normalize_email
 from app.models.college import College, CollegeApplication
 from app.models.enums import ApplicationStatus, CollegeStatus, MembershipRole
 from app.models.mixins import utcnow
-from app.models.user import CollegeMembership, User
+from app.models.user import CollegeMembership
 from app.services.auth import get_or_create_user
 
 _SLUG_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
