@@ -39,3 +39,23 @@ a {
     scroll-behavior: auto;
   }
 }
+
+/* Leaflet / OSM contrast for UniTransit dark mode (owner CSS; map components untouched) */
+html[data-color-mode="dark"] .leaflet-tile-pane {
+  filter: brightness(0.72) contrast(1.08) saturate(0.78);
+}
+
+html[data-color-mode="dark"] .leaflet-control-attribution {
+  background: rgba(21, 30, 46, 0.88) !important;
+  color: #9aa6b2;
+}
+
+html[data-color-mode="dark"] .leaflet-control-attribution a {
+  color: #2dd4bf;
+}
+
+html[data-color-mode="dark"] .leaflet-popup-content-wrapper,
+html[data-color-mode="dark"] .leaflet-popup-tip {
+  background: #151e2e;
+  color: #e8eef7;
+}

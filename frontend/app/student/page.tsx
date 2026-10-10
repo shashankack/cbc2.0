@@ -16,6 +16,7 @@ import type { Allocation } from "@/types/api";
 const NAV = [
   { href: "/student", label: "Assignment" },
   { href: "/student/board", label: "Board" },
+  { href: "/student/trip", label: "Live map" },
 ];
 
 export default function StudentPage() {
@@ -51,9 +52,14 @@ export default function StudentPage() {
         title="My assignment"
         description="Pick/drop is locked after your college admin confirms a planning run."
         actions={
-          <Button href="/student/board" variant="contained">
-            Board with QR
-          </Button>
+          <Stack direction="row" spacing={1}>
+            <Button href="/student/trip" variant="outlined">
+              Live map
+            </Button>
+            <Button href="/student/board" variant="contained">
+              Board with QR
+            </Button>
+          </Stack>
         }
       />
       {error ? (

@@ -116,6 +116,59 @@ export type Allocation = {
   planning_run_id: string;
 };
 
+export type PlanningStop = {
+  id: string;
+  name: string;
+  lat: number;
+  lng: number;
+  source: string;
+};
+
+export type PlanningRouteStop = {
+  sequence: number;
+  stop_id: string;
+  name: string | null;
+  lat: number | null;
+  lng: number | null;
+};
+
+export type PlanningRoute = {
+  id: string;
+  name: string;
+  status: string;
+  route_stops: PlanningRouteStop[];
+};
+
+export type PlanningItem = {
+  id: string;
+  student_id: string;
+  stop_id: string | null;
+  route_id: string | null;
+  bus_id: string | null;
+  status: string;
+};
+
+export type PlanningRun = {
+  id: string;
+  college_id: string;
+  campus_id: string;
+  import_batch_id: string | null;
+  status: string;
+  confirmed_at: string | null;
+  created_at: string;
+  stops: PlanningStop[];
+  routes: PlanningRoute[];
+  items: PlanningItem[];
+};
+
+export type TripLocation = {
+  trip_id: string;
+  status: string;
+  lat: number | null;
+  lng: number | null;
+  recorded_at: string | null;
+};
+
 export type Trip = {
   id: string;
   college_id: string;

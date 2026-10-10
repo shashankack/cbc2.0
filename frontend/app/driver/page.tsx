@@ -8,16 +8,24 @@ import Stack from "@mui/material/Stack";
 import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 import {
+  MapCanvas,
+  MapLegend,
+  RoutePolyline,
+  StopMarkers,
+} from "@/components/maps";
+import {
   DistressButton,
   OrderedStopList,
   TripQrPanel,
   TripSessionControls,
 } from "@/components/trips";
+import { centerFromPoints, stopsToMarkers } from "@/features/maps";
 import PortalShell from "@/features/shell/PortalShell";
 import { PageHeader, SectionCard, StatusChip } from "@/features/ui";
 import { apiPost, ApiError } from "@/lib/api";
 import { primaryCollegeId, resolveHomePath, useAuth } from "@/lib/auth";
 import { hasRole } from "@/lib/roles";
+import { brand } from "@/theme/tokens";
 import type { Trip } from "@/types/api";
 
 type ItineraryStop = {
@@ -213,6 +221,45 @@ export default function DriverPage() {
                   subtitle: `${s.lat.toFixed(4)}, ${s.lng.toFixed(4)}`,
                 }))}
               />
+              {itinerary.length ? (
+                <Stack sx={{ mt: 2 }}>
+                  <MapCanvas
+                    center={centerFromPoints(
+                      itinerary.map((s) => ({ lat: s.lat, lng: s.lng })),
+                    )}
+                    zoom={13}
+                    height={360}
+                    legend={
+                      <MapLegend
+                        items={[
+                          {
+                            id: "stops",
+                            color: brand.royal,
+                            label: "Stops in visit order",
+                          },
+                        ]}
+                      />
+                    }
+                  >
+                    <StopMarkers
+                      stops={stopsToMarkers(itinerary)}
+                      color={brand.royal}
+                    />
+                    <RoutePolyline
+                      routes={[
+                        {
+                          id: trip.route_id,
+                          label: "Itinerary",
+                          color: brand.teal,
+                          positions: [...itinerary]
+                            .sort((a, b) => a.sequence - b.sequence)
+                            .map((s) => ({ lat: s.lat, lng: s.lng })),
+                        },
+                      ]}
+                    />
+                  </MapCanvas>
+                </Stack>
+              ) : null}
             </SectionCard>
 
             {sessionStatus === "active" ? (

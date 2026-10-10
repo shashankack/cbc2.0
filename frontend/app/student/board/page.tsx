@@ -16,6 +16,7 @@ import { hasRole } from "@/lib/roles";
 const NAV = [
   { href: "/student", label: "Assignment" },
   { href: "/student/board", label: "Board" },
+  { href: "/student/trip", label: "Live map" },
 ];
 
 export default function StudentBoardPage() {
