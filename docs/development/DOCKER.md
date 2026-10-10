@@ -24,18 +24,20 @@ docker compose down -v       # ALSO deletes DB data volume — careful
 
 ## Connection
 
+Copy `.env.example` → `.env` at the repo root and set `POSTGRES_PASSWORD` (required by compose). Use the same password in `backend/.env` `DATABASE_URL`.
+
 | Setting | Value |
 |---------|--------|
 | Host | `localhost` |
 | Port | `5432` |
-| User | `postgres` |
-| Password | `postgres` |
-| Database | `college_bus` |
+| User | from `POSTGRES_USER` (default `postgres`) |
+| Password | from `POSTGRES_PASSWORD` (required) |
+| Database | from `POSTGRES_DB` (default `college_bus`) |
 
 `backend/.env` (use `pg8000` on Windows if App Control blocks `psycopg` DLLs):
 
 ```env
-DATABASE_URL=postgresql+pg8000://postgres:postgres@localhost:5432/college_bus
+DATABASE_URL=postgresql+pg8000://postgres:YOUR_LOCAL_PASSWORD@localhost:5432/college_bus
 ```
 
 ## Verify

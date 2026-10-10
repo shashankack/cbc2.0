@@ -16,7 +16,7 @@
 Default local DB URL (matches Docker Compose):
 
 ```env
-DATABASE_URL=postgresql+pg8000://postgres:postgres@localhost:5432/college_bus
+DATABASE_URL=postgresql+pg8000://postgres:YOUR_LOCAL_PASSWORD@localhost:5432/college_bus
 ```
 
 ## Database (Docker)

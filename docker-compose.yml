@@ -3,16 +3,19 @@ services:
     image: postgres:16
     container_name: cbc-postgres
     restart: unless-stopped
+    env_file:
+      - path: .env
+        required: false
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: college_bus
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in a local .env file (see .env.example)}
+      POSTGRES_DB: ${POSTGRES_DB:-college_bus}
     ports:
       - "5432:5432"
     volumes:
       - cbc_pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d college_bus"]
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
       interval: 5s
       timeout: 5s
       retries: 10
