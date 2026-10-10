@@ -4,7 +4,6 @@ import Button from "@mui/material/Button";
 import Container from "@mui/material/Container";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
-import NextLink from "next/link";
 
 export default function Home() {
   return (
@@ -35,15 +34,10 @@ export default function Home() {
             tracking — without heavy ML.
           </Typography>
           <Stack direction="row" spacing={2}>
-            <Button
-              component={NextLink}
-              href="/login"
-              variant="contained"
-              size="large"
-            >
+            <Button href="/login" variant="contained" size="large">
               Sign in with email OTP
             </Button>
-            <Button component={NextLink} href="/app" variant="outlined" size="large">
+            <Button href="/app" variant="outlined" size="large">
               Open portal
             </Button>
           </Stack>
