@@ -40,6 +40,7 @@ export function routesToPolylines(
     name: string;
     route_stops: {
       sequence: number;
+      stop_id?: string;
       lat: number | null;
       lng: number | null;
     }[];
@@ -49,16 +50,38 @@ export function routesToPolylines(
     const ordered = [...route.route_stops].sort(
       (a, b) => a.sequence - b.sequence,
     );
+    const positions = ordered
+      .filter(
+        (s): s is { sequence: number; lat: number; lng: number; stop_id?: string } =>
+          s.lat != null && s.lng != null,
+      )
+      .map((s) => ({ lat: s.lat, lng: s.lng }));
+
+    // Defensive close: if API omitted the final campus bookend but the first
+    // stop is the depot (same stop_id at seq 1 only once), keep path as-is;
+    // if first≠last by coordinates, append depot so the map always returns.
+    if (positions.length >= 2) {
+      const first = positions[0]!;
+      const last = positions[positions.length - 1]!;
+      const firstStop = ordered.find((s) => s.lat != null);
+      const lastStop = [...ordered].reverse().find((s) => s.lat != null);
+      const bookendedByStopId =
+        firstStop?.stop_id != null &&
+        lastStop?.stop_id != null &&
+        firstStop.stop_id === lastStop.stop_id;
+      const bookendedByCoords =
+        Math.abs(first.lat - last.lat) < 1e-6 &&
+        Math.abs(first.lng - last.lng) < 1e-6;
+      if (!bookendedByStopId && !bookendedByCoords) {
+        positions.push({ lat: first.lat, lng: first.lng });
+      }
+    }
+
     return {
       id: route.id,
       label: route.name,
       color: routeColor(index),
-      positions: ordered
-        .filter(
-          (s): s is { sequence: number; lat: number; lng: number } =>
-            s.lat != null && s.lng != null,
-        )
-        .map((s) => ({ lat: s.lat, lng: s.lng })),
+      positions,
     };
   });
 }

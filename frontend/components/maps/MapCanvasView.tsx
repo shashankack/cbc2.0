@@ -70,6 +70,7 @@ export default function MapCanvasView({
   minZoom = 3,
   maxZoom = 18,
   scrollWheelZoom = true,
+  autoRecenter = true,
 }: MapCanvasProps) {
   const mountSeq = useRef(0);
   const [instanceId, setInstanceId] = useState<number | null>(null);
@@ -108,7 +109,9 @@ export default function MapCanvasView({
         scrollWheelZoom={scrollWheelZoom}
         style={{ height: "100%", width: "100%" }}
       >
-        <Recenter lat={center.lat} lng={center.lng} zoom={zoom} />
+        {autoRecenter ? (
+          <Recenter lat={center.lat} lng={center.lng} zoom={zoom} />
+        ) : null}
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"

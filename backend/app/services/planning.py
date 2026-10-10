@@ -29,7 +29,15 @@ from app.models.planning import (
     Stop,
 )
 from app.models.student import Student, StudentImportBatch
-from app.services.geo import Point, centroid, dbscan, nearest_neighbor_order
+from app.services.geocode import reverse_place_name
+from app.services.geo import (
+    Point,
+    centroid,
+    dbscan,
+    nearest_neighbor_order,
+    split_ordered_by_gap,
+    two_opt_order,
+)
 
 
 def _campus_settings(
@@ -153,13 +161,19 @@ def run_planning(
     stop_for_cluster: dict[int, Stop] = {}
     members_by_stop: dict[uuid.UUID, list[uuid.UUID]] = {}
 
+    used_names: set[str] = set()
     for cid, members in clusters.items():
         lat, lng = centroid(members)
+        place = reverse_place_name(lat, lng)
+        name = place
+        if name in used_names:
+            name = f"{place} ({cid + 1})"
+        used_names.add(name)
         stop = Stop(
             college_id=college_id,
             campus_id=campus_id,
             planning_run_id=run.id,
-            name=f"Cluster {cid + 1}",
+            name=name,
             lat=lat,
             lng=lng,
             source=StopSource.CLUSTER,
@@ -241,12 +255,22 @@ def run_planning(
     db.add(campus_stop)
     db.flush()
 
-    # Assemble multi-stop routes: NN order from campus depot, packed by capacity.
+    # Pipeline:
+    # 1) Student homes → density clusters → centroid pickup stops (above)
+    # 2) Group closest centroids into geographic chains (= candidate routes)
+    # 3) Optimize visit order, pack each chain onto buses by capacity
+    # 4) Bookend campus depot on every route
+    stop_by_id = {s.id: s for s in stop_for_cluster.values()}
     stop_points = [
         Point(id=s.id, lat=s.lat, lng=s.lng) for s in stop_for_cluster.values()
     ]
     depot = Point(id=campus_stop.id, lat=float(campus.lat), lng=float(campus.lng))
     ordered_stops = nearest_neighbor_order(stop_points, depot=depot)
+    # Link nearby centroids into the same corridor/route family.
+    route_link_eps_m = max(float(settings.cluster_eps_m) * 3.0, 1200.0)
+    geo_chains = split_ordered_by_gap(ordered_stops, max_gap_m=route_link_eps_m)
+    geo_chains = [two_opt_order(chain, depot=depot) for chain in geo_chains]
+
     bus_iter = list(buses)
     bus_idx = 0
     route_num = 0
@@ -290,74 +314,37 @@ def run_planning(
                 )
                 student_by_id[sid].status = StudentStatus.ALLOCATED
 
-    stop_i = 0
-    while stop_i < len(ordered_stops):
-        stop_id = ordered_stops[stop_i].id  # type: ignore[assignment]
-        members = members_by_stop.get(stop_id, [])
-        if not members:
-            stop_i += 1
-            continue
+    def _route_label(packed_stop_ids: list[uuid.UUID]) -> str:
+        names = [
+            stop_by_id[sid].name
+            for sid in packed_stop_ids
+            if sid in stop_by_id
+        ]
+        if not names:
+            return f"Route {route_num}"
+        if len(names) == 1:
+            return f"Route · {names[0]}"
+        return f"Route · {names[0]} → {names[-1]}"
 
-        if bus_idx >= len(bus_iter):
-            leftover: list[uuid.UUID] = []
-            for sp in ordered_stops[stop_i:]:
-                leftover.extend(members_by_stop.get(sp.id, []))  # type: ignore[arg-type]
-            _mark_students_for_review(leftover)
-            break
-
-        bus = bus_iter[bus_idx]
-        bus_idx += 1
-        packed: list[tuple[uuid.UUID, list[uuid.UUID]]] = []
-        headcount = 0
-
-        while stop_i < len(ordered_stops):
-            sid = ordered_stops[stop_i].id  # type: ignore[assignment]
-            stop_members = members_by_stop.get(sid, [])
-            n = len(stop_members)
-            if n == 0:
-                stop_i += 1
-                continue
-
-            # Single stop larger than this bus: fill what fits, leave rest for next bus.
-            if not packed and n > bus.capacity:
-                chunk = stop_members[: bus.capacity]
-                rest = stop_members[bus.capacity :]
-                members_by_stop[sid] = rest
-                packed.append((sid, chunk))
-                headcount = len(chunk)
-                # Do not advance stop_i — remaining headcount stays on this stop.
-                break
-
-            if headcount + n > bus.capacity:
-                break
-
-            packed.append((sid, stop_members))
-            headcount += n
-            stop_i += 1
-
-        if not packed:
-            # Could not place current stop on any remaining bus capacity.
-            _mark_students_for_review(members)
-            stop_i += 1
-            continue
-
+    def _emit_route(
+        packed: list[tuple[uuid.UUID, list[uuid.UUID]]],
+        bus: Bus,
+    ) -> None:
+        nonlocal route_num
+        headcount = sum(len(m) for _, m in packed)
         if headcount < settings.min_students_per_route:
-            _mark_students_for_review(
-                [sid for _, m in packed for sid in m]
-            )
-            continue
-
+            _mark_students_for_review([sid for _, m in packed for sid in m])
+            return
         route_num += 1
         route = Route(
             college_id=college_id,
             campus_id=campus_id,
             planning_run_id=run.id,
-            name=f"Route {route_num}",
+            name=_route_label([sid for sid, _ in packed]),
             status=RouteStatus.DRAFT,
         )
         db.add(route)
         db.flush()
-        # Sequence: campus → pickups → campus
         db.add(
             RouteStop(
                 college_id=college_id,
@@ -384,6 +371,57 @@ def run_planning(
                 sequence=len(packed) + 2,
             )
         )
+
+    for chain in geo_chains:
+        stop_i = 0
+        while stop_i < len(chain):
+            stop_id = chain[stop_i].id  # type: ignore[assignment]
+            members = members_by_stop.get(stop_id, [])
+            if not members:
+                stop_i += 1
+                continue
+
+            if bus_idx >= len(bus_iter):
+                leftover: list[uuid.UUID] = []
+                for sp in chain[stop_i:]:
+                    leftover.extend(members_by_stop.get(sp.id, []))  # type: ignore[arg-type]
+                _mark_students_for_review(leftover)
+                break
+
+            bus = bus_iter[bus_idx]
+            bus_idx += 1
+            packed: list[tuple[uuid.UUID, list[uuid.UUID]]] = []
+            headcount = 0
+
+            while stop_i < len(chain):
+                sid = chain[stop_i].id  # type: ignore[assignment]
+                stop_members = members_by_stop.get(sid, [])
+                n = len(stop_members)
+                if n == 0:
+                    stop_i += 1
+                    continue
+
+                if not packed and n > bus.capacity:
+                    chunk = stop_members[: bus.capacity]
+                    rest = stop_members[bus.capacity :]
+                    members_by_stop[sid] = rest
+                    packed.append((sid, chunk))
+                    headcount = len(chunk)
+                    break
+
+                if headcount + n > bus.capacity:
+                    break
+
+                packed.append((sid, stop_members))
+                headcount += n
+                stop_i += 1
+
+            if not packed:
+                _mark_students_for_review(members)
+                stop_i += 1
+                continue
+
+            _emit_route(packed, bus)
 
     run.status = PlanningRunStatus.PROPOSED
     db.commit()

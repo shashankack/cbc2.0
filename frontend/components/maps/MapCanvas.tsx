@@ -48,6 +48,8 @@ export type MapCanvasProps = {
   minZoom?: number;
   maxZoom?: number;
   scrollWheelZoom?: boolean;
+  /** When false, skip Recenter so children like FitBounds own the viewport. */
+  autoRecenter?: boolean;
   loading?: boolean;
   error?: string | null;
   emptyMessage?: string;
@@ -66,6 +68,7 @@ export function MapCanvas({
   legend,
   children,
   showApproxDisclaimer = true,
+  autoRecenter = true,
   ...viewProps
 }: MapCanvasProps) {
   const invalidCenter =
@@ -107,7 +110,12 @@ export function MapCanvas({
             </Alert>
           </Box>
         ) : (
-          <MapCanvasView center={center} zoom={zoom} {...viewProps}>
+          <MapCanvasView
+            center={center}
+            zoom={zoom}
+            autoRecenter={autoRecenter}
+            {...viewProps}
+          >
             {children}
           </MapCanvasView>
         )}

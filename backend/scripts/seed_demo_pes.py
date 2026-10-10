@@ -4,9 +4,12 @@ Creates (or updates) college, campus, domain, settings, buses, and drivers.
 Does NOT import students or run planning — upload the CSV yourself.
 
 Demo sizing (after import + planning on RING):
-  - 24 students in 6 corridor clusters (4 each)
-  - 3 available buses @ capacity 8
-  - packing yields 3 multi-stop routes (2 stops × 8 seats each)
+  - ~150 students in 15 city pockets (10 each): Banaswadi, Ramamurthy Nagar,
+    JP Nagar, Hoskote, Yelahanka, Jayanagar, Tumkur Road, Vijayanagar,
+    Basavanagudi, Kengeri, Jnanabharathi, Bangalore University, RR Nagar,
+    Banashankari, BTM Layout
+  - 6 available buses @ capacity 30 (180 seats)
+  - planning packs neighborhood stops into multi-stop routes back to RING depot
 
 Usage (from backend/, venv active):
   python scripts/seed_demo_pes.py
@@ -70,12 +73,18 @@ DRIVER_EMAILS = (
     ("driver@pes.edu", "PES Driver 1"),
     ("driver2@pes.edu", "PES Driver 2"),
     ("driver3@pes.edu", "PES Driver 3"),
+    ("driver4@pes.edu", "PES Driver 4"),
+    ("driver5@pes.edu", "PES Driver 5"),
+    ("driver6@pes.edu", "PES Driver 6"),
 )
-# Capacity 8 + 6 clusters of 4 → three packed routes of two stops each.
+# ~150 students / capacity 30 → up to 6 packed routes (city-wide pockets).
 BUS_SPECS = (
-    ("KA01PE1001", 8, "driver@pes.edu"),
-    ("KA01PE1002", 8, "driver2@pes.edu"),
-    ("KA01PE1003", 8, "driver3@pes.edu"),
+    ("KA01PE1001", 30, "driver@pes.edu"),
+    ("KA01PE1002", 30, "driver2@pes.edu"),
+    ("KA01PE1003", 30, "driver3@pes.edu"),
+    ("KA01PE1004", 30, "driver4@pes.edu"),
+    ("KA01PE1005", 30, "driver5@pes.edu"),
+    ("KA01PE1006", 30, "driver6@pes.edu"),
 )
 
 FIXTURE_CSV = Path(__file__).resolve().parent / "fixtures" / "pes_ring_road_students.csv"
@@ -193,8 +202,9 @@ def _ensure_campus(db, college: College) -> Campus:
             Campus.code == CAMPUS_CODE,
         )
     )
-    # Depot near the Ring Road corridor used by the fixture CSV.
-    depot_lat, depot_lng = 12.93650, 77.60600
+    # Real PES University (Outer Ring Road / Hosakerehalli) — matches Nominatim
+    # "PES University" search. Do not use a BTM/Koramangala stand-in.
+    depot_lat, depot_lng = 12.93424, 77.53432
 
     if campus is None:
         campus = Campus(
@@ -326,16 +336,19 @@ def main() -> None:
     print()
     print(f"  College:  {COLLEGE_NAME}  ({college_id})")
     print(f"  Campus:   {CAMPUS_NAME} [{CAMPUS_CODE}]  ({campus_id})")
-    print("  Depot:    12.93650, 77.60600 (routes start/end here)")
+    print("  Depot:    12.93424, 77.53432 (PES University ORR — routes start/end here)")
     print(f"  Domain:   {DOMAIN} (active)")
     print(f"  Admin:    {ADMIN_EMAIL}")
     print(f"  Drivers:  {', '.join(e for e, _ in DRIVER_EMAILS)}")
     print(f"  Buses:    {bus_label}")
-    print("  Expected after import+plan: 3 routes (2 stops each)")
+    print("  Expected after import+plan: multi-stop routes from city pockets -> RING")
     print()
-    print("Manual import CSV:")
+    print("Manual import CSV (15 Bangalore neighborhood pockets):")
     print(f"  {FIXTURE_CSV}")
-    print(f"  ({sum(1 for _ in FIXTURE_CSV.open(encoding='utf-8')) - 1} students, 6 corridor clusters)")
+    print(f"  ({sum(1 for _ in FIXTURE_CSV.open(encoding='utf-8')) - 1} students)")
+    print()
+    print("Regenerate CSV if needed:")
+    print("  python scripts/generate_pes_students_csv.py")
     print()
     print("Steps:")
     print(f"  1. Login as {ADMIN_EMAIL} (OTP in uvicorn log)")
@@ -343,7 +356,7 @@ def main() -> None:
     print(f"  3. Select campus {CAMPUS_CODE} ({campus_id})")
     print("  4. Upload the CSV above")
     print("  5. Continue to Planning (or Admin -> Planning)")
-    print("  6. Run clustering / assignment (expect 3 routes), then Confirm")
+    print("  6. Run clustering / assignment, then Confirm")
 
 
 if __name__ == "__main__":

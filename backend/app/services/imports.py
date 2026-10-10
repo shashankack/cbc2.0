@@ -9,7 +9,7 @@ import uuid
 from typing import Any
 
 from openpyxl import load_workbook
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.errors import AppError
@@ -267,6 +267,52 @@ def list_batches(
     if campus_id is not None:
         stmt = stmt.where(StudentImportBatch.campus_id == campus_id)
     return list(db.scalars(stmt).all())
+
+
+def serialize_batch(db: Session, batch: StudentImportBatch) -> dict[str, Any]:
+    """Enrich a batch with campus labels and active vs locked student counts."""
+    campus = db.get(Campus, batch.campus_id)
+    active_count = (
+        db.scalar(
+            select(func.count())
+            .select_from(Student)
+            .where(
+                Student.college_id == batch.college_id,
+                Student.import_batch_id == batch.id,
+                Student.status != StudentStatus.LOCKED,
+            )
+        )
+        or 0
+    )
+    locked_count = (
+        db.scalar(
+            select(func.count())
+            .select_from(Student)
+            .where(
+                Student.college_id == batch.college_id,
+                Student.import_batch_id == batch.id,
+                Student.status == StudentStatus.LOCKED,
+            )
+        )
+        or 0
+    )
+    return {
+        "id": batch.id,
+        "college_id": batch.college_id,
+        "campus_id": batch.campus_id,
+        "filename": batch.filename,
+        "status": batch.status,
+        "row_count": batch.row_count,
+        "valid_count": batch.valid_count,
+        "error_count": batch.error_count,
+        "created_at": batch.created_at,
+        "campus_code": campus.code if campus else None,
+        "campus_name": campus.name if campus else None,
+        "active_student_count": int(active_count),
+        "locked_student_count": int(locked_count),
+        "is_active": batch.status == ImportBatchStatus.COMPLETED
+        and int(active_count) > 0,
+    }
 
 
 def list_students(

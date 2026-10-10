@@ -164,16 +164,39 @@ function AdminPlanningPageInner() {
 
   const mapLayers = useMemo(() => {
     if (!run) return null;
-    const centroids = run.stops.map((s) => ({
-      id: s.id,
-      label: s.name,
-      lat: s.lat,
-      lng: s.lng,
-    }));
-    const polylines = routesToPolylines(run.routes);
-    const stopMarkers = run.routes.flatMap((route) =>
-      [...route.route_stops]
+    const depotStop =
+      run.stops.find((s) => s.source === "campus") ??
+      run.routes
+        .flatMap((r) => r.route_stops)
         .sort((a, b) => a.sequence - b.sequence)
+        .find((s) => s.lat != null && s.lng != null) ??
+      null;
+    const depot =
+      depotStop && depotStop.lat != null && depotStop.lng != null
+        ? {
+            lat: depotStop.lat,
+            lng: depotStop.lng,
+            label:
+              "name" in depotStop && depotStop.name
+                ? depotStop.name
+                : "Campus depot",
+          }
+        : null;
+    // Pickup centroids only — campus depot is rendered separately.
+    const centroids = run.stops
+      .filter((s) => s.source !== "campus")
+      .map((s) => ({
+        id: s.id,
+        label: s.name,
+        lat: s.lat,
+        lng: s.lng,
+      }));
+    const polylines = routesToPolylines(run.routes);
+    const stopMarkers = run.routes.flatMap((route) => {
+      const ordered = [...route.route_stops].sort(
+        (a, b) => a.sequence - b.sequence,
+      );
+      return ordered
         .filter(
           (
             s,
@@ -185,23 +208,32 @@ function AdminPlanningPageInner() {
             lng: number;
           } => s.lat != null && s.lng != null,
         )
+        // Skip campus bookends — DepotMarker + dashed return show the loop.
+        .filter((s) => {
+          if (!depot) return true;
+          return (
+            Math.abs(s.lat - depot.lat) > 1e-5 ||
+            Math.abs(s.lng - depot.lng) > 1e-5
+          );
+        })
         .map((s) => ({
-          // Include sequence: campus depot is listed at start and end with the same stop_id.
           id: `${route.id}-${s.stop_id}-${s.sequence}`,
           sequence: s.sequence,
           label: s.name ?? s.stop_id.slice(0, 8),
           lat: s.lat,
           lng: s.lng,
-        })),
-    );
+        }));
+    });
     const points = [
       ...centroids.map((c) => ({ lat: c.lat, lng: c.lng })),
       ...polylines.flatMap((r) => r.positions),
+      ...(depot ? [{ lat: depot.lat, lng: depot.lng }] : []),
     ];
     return {
       centroids,
       polylines,
       stopMarkers,
+      depot,
       center: centerFromPoints(points),
     };
   }, [run]);
@@ -270,7 +302,10 @@ function AdminPlanningPageInner() {
               <MenuItem value="">All imported students on campus</MenuItem>
               {campusBatches.map((b) => (
                 <MenuItem key={b.id} value={b.id}>
-                  {b.filename} · {b.valid_count} valid · {b.status}
+                  {b.filename} · {b.active_student_count ?? b.valid_count} active
+                  {" / "}
+                  {b.locked_student_count ?? 0} locked
+                  {b.is_active ? " · active" : ""}
                 </MenuItem>
               ))}
             </TextField>
@@ -336,12 +371,23 @@ function AdminPlanningPageInner() {
               {run.status === "confirmed"
                 ? " · pickups locked for students"
                 : ""}
+              {mapLayers?.depot
+                ? " · solid path = outbound, dashed = return to campus"
+                : ""}
             </Typography>
+            {campusCode === "MAIN" &&
+            campuses.some((c) => c.code === "RING") ? (
+              <Alert severity="info" sx={{ mb: 2 }}>
+                This run is on campus MAIN. For PES Ring Road depot returns, view or
+                re-run planning on campus RING.
+              </Alert>
+            ) : null}
             <PlanningProposalMap
               center={mapLayers?.center ?? null}
               centroids={mapLayers?.centroids ?? []}
               polylines={mapLayers?.polylines ?? []}
               stopMarkers={mapLayers?.stopMarkers ?? []}
+              depot={mapLayers?.depot ?? null}
             />
             {run.routes.length > 0 ? (
               <Stack spacing={2} sx={{ mt: 2 }}>

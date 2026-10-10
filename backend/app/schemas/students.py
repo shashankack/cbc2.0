@@ -18,6 +18,13 @@ class ImportBatchOut(ORMModel):
     valid_count: int
     error_count: int
     created_at: datetime
+    campus_code: str | None = None
+    campus_name: str | None = None
+    # Students from this batch not yet locked (still in the planning pool).
+    active_student_count: int = 0
+    locked_student_count: int = 0
+    # True when completed and at least one student is still unlocked.
+    is_active: bool = False
 
 
 class StudentOut(ORMModel):

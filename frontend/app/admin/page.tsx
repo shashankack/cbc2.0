@@ -154,7 +154,7 @@ export default function AdminCampusesPage() {
     setDepotTarget(target);
   }
 
-  function applyPicker() {
+  async function applyPicker() {
     if (!depotTarget || !pickerPoint) {
       setGeoError("Click the map or use current location first.");
       return;
@@ -162,14 +162,36 @@ export default function AdminCampusesPage() {
     const lat = String(pickerPoint.lat);
     const lng = String(pickerPoint.lng);
     if (depotTarget.kind === "campus") {
+      const campusId = depotTarget.campusId;
       setCoordDrafts((prev) => ({
         ...prev,
-        [depotTarget.campusId]: { lat, lng },
+        [campusId]: { lat, lng },
       }));
-    } else {
-      setCreateLat(lat);
-      setCreateLng(lng);
+      // Persist immediately — planning reads DB coords, not the draft fields.
+      if (!collegeId) return;
+      setGeoBusy(true);
+      try {
+        await apiPatch(`/colleges/${collegeId}/campuses/${campusId}`, {
+          lat: pickerPoint.lat,
+          lng: pickerPoint.lng,
+        });
+        await load(collegeId);
+        setDepotTarget(null);
+        setGeoError(null);
+        setError(null);
+      } catch (err) {
+        setGeoError(
+          err instanceof ApiError
+            ? err.message
+            : "Could not save depot. Coordinates are in the form — click Save.",
+        );
+      } finally {
+        setGeoBusy(false);
+      }
+      return;
     }
+    setCreateLat(lat);
+    setCreateLng(lng);
     setDepotTarget(null);
     setGeoError(null);
   }
@@ -330,7 +352,7 @@ export default function AdminCampusesPage() {
                                 [c.id]: { ...draft, lat: e.target.value },
                               }))
                             }
-                            placeholder="12.9345"
+                            placeholder="12.93424"
                           />
                         </TableCell>
                         <TableCell sx={{ minWidth: 120 }}>
@@ -343,7 +365,7 @@ export default function AdminCampusesPage() {
                                 [c.id]: { ...draft, lng: e.target.value },
                               }))
                             }
-                            placeholder="77.6050"
+                            placeholder="77.53432"
                           />
                         </TableCell>
                         <TableCell>
@@ -510,8 +532,9 @@ export default function AdminCampusesPage() {
         <DialogContent>
           <Stack spacing={2} sx={{ pt: 1 }}>
             <Typography variant="body2" color="text.secondary">
-              Search for a place, use your current location, or click the map.
-              Then apply and save the campus.
+              Search for a place (e.g. PES University), use your current location,
+              or click the map. Apply saves the depot to this campus immediately
+              so planning uses the same pin.
             </Typography>
             {geoError ? <Alert severity="warning">{geoError}</Alert> : null}
             <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap" }}>
@@ -546,8 +569,12 @@ export default function AdminCampusesPage() {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setDepotTarget(null)}>Cancel</Button>
-          <Button variant="contained" onClick={applyPicker}>
-            Apply coordinates
+          <Button
+            variant="contained"
+            disabled={geoBusy || !pickerPoint}
+            onClick={() => void applyPicker()}
+          >
+            {geoBusy ? "Saving…" : "Apply & save depot"}
           </Button>
         </DialogActions>
       </Dialog>

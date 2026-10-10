@@ -1,25 +1,151 @@
 name,srn,email,lat,lng
-Aisha Khan,PES2024001,aisha.khan@pes.edu,12.93500,77.61100
-Rohan Mehta,PES2024002,rohan.mehta@pes.edu,12.93520,77.61120
-Priya Nair,PES2024003,priya.nair@pes.edu,12.93540,77.61140
-Arjun Rao,PES2024004,arjun.rao@pes.edu,12.93560,77.61160
-Sneha Iyer,PES2024005,sneha.iyer@pes.edu,12.93200,77.61600
-Neha Reddy,PES2024006,neha.reddy@pes.edu,12.93220,77.61620
-Diya Krishnan,PES2024007,diya.krishnan@pes.edu,12.93240,77.61640
-Karan Malhotra,PES2024008,karan.malhotra@pes.edu,12.93260,77.61660
-Kabir Shah,PES2024009,kabir.shah@pes.edu,12.92800,77.62200
-Meera Joshi,PES2024010,meera.joshi@pes.edu,12.92820,77.62220
-Dev Patel,PES2024011,dev.patel@pes.edu,12.92840,77.62240
-Ananya Das,PES2024012,ananya.das@pes.edu,12.92860,77.62260
-Vikram Singh,PES2024013,vikram.singh@pes.edu,12.92400,77.62800
-Ishaan Gupta,PES2024014,ishaan.gupta@pes.edu,12.92420,77.62820
-Riya Menon,PES2024015,riya.menon@pes.edu,12.92440,77.62840
-Aditya Bose,PES2024016,aditya.bose@pes.edu,12.92460,77.62860
-Sara Ali,PES2024017,sara.ali@pes.edu,12.91800,77.63600
-Harsh Verma,PES2024018,harsh.verma@pes.edu,12.91820,77.63620
-Nisha Pillai,PES2024019,nisha.pillai@pes.edu,12.91840,77.63640
-Rahul Desai,PES2024020,rahul.desai@pes.edu,12.91860,77.63660
-Zara Khan,PES2024021,zara.khan@pes.edu,12.91200,77.64500
-Omar Farooq,PES2024022,omar.farooq@pes.edu,12.91220,77.64520
-Leela Rao,PES2024023,leela.rao@pes.edu,12.91240,77.64540
-Manish Jain,PES2024024,manish.jain@pes.edu,12.91260,77.64560
+Aisha Rao,PES20240001,aisha.rao1@pes.edu,13.01516,77.64116
+Rohan Malhotra,PES20240002,rohan.malhotra2@pes.edu,13.01528,77.64121
+Priya Das,PES20240003,priya.das3@pes.edu,13.01540,77.64126
+Arjun Bose,PES20240004,arjun.bose4@pes.edu,13.01552,77.64116
+Sneha Desai,PES20240005,sneha.desai5@pes.edu,13.01564,77.64121
+Neha Bhat,PES20240006,neha.bhat6@pes.edu,13.01516,77.64140
+Diya Nayak,PES20240007,diya.nayak7@pes.edu,13.01528,77.64130
+Karan Mehta,PES20240008,karan.mehta8@pes.edu,13.01540,77.64135
+Kabir Reddy,PES20240009,kabir.reddy9@pes.edu,13.01552,77.64140
+Meera Joshi,PES20240010,meera.joshi10@pes.edu,13.01564,77.64130
+Dev Rao,PES20240011,dev.rao11@pes.edu,13.01596,77.67466
+Ananya Malhotra,PES20240012,ananya.malhotra12@pes.edu,13.01608,77.67471
+Vikram Das,PES20240013,vikram.das13@pes.edu,13.01620,77.67476
+Ishaan Bose,PES20240014,ishaan.bose14@pes.edu,13.01632,77.67466
+Riya Desai,PES20240015,riya.desai15@pes.edu,13.01644,77.67471
+Aditya Bhat,PES20240016,aditya.bhat16@pes.edu,13.01596,77.67490
+Sara Nayak,PES20240017,sara.nayak17@pes.edu,13.01608,77.67480
+Harsh Mehta,PES20240018,harsh.mehta18@pes.edu,13.01620,77.67485
+Nisha Reddy,PES20240019,nisha.reddy19@pes.edu,13.01632,77.67490
+Rahul Joshi,PES20240020,rahul.joshi20@pes.edu,13.01644,77.67480
+Zara Rao,PES20240021,zara.rao21@pes.edu,12.90606,77.58536
+Omar Malhotra,PES20240022,omar.malhotra22@pes.edu,12.90618,77.58541
+Leela Das,PES20240023,leela.das23@pes.edu,12.90630,77.58546
+Manish Bose,PES20240024,manish.bose24@pes.edu,12.90642,77.58536
+Isha Desai,PES20240025,isha.desai25@pes.edu,12.90654,77.58541
+Varun Bhat,PES20240026,varun.bhat26@pes.edu,12.90606,77.58560
+Pooja Nayak,PES20240027,pooja.nayak27@pes.edu,12.90618,77.58550
+Siddharth Mehta,PES20240028,siddharth.mehta28@pes.edu,12.90630,77.58555
+Kavya Reddy,PES20240029,kavya.reddy29@pes.edu,12.90642,77.58560
+Aman Joshi,PES20240030,aman.joshi30@pes.edu,12.90654,77.58550
+Tanvi Rao,PES20240031,tanvi.rao31@pes.edu,13.07066,77.79806
+Nikhil Malhotra,PES20240032,nikhil.malhotra32@pes.edu,13.07078,77.79811
+Shruti Das,PES20240033,shruti.das33@pes.edu,13.07090,77.79816
+Yash Bose,PES20240034,yash.bose34@pes.edu,13.07102,77.79806
+Anika Desai,PES20240035,anika.desai35@pes.edu,13.07114,77.79811
+Rajat Bhat,PES20240036,rajat.bhat36@pes.edu,13.07066,77.79830
+Myra Nayak,PES20240037,myra.nayak37@pes.edu,13.07078,77.79820
+Kiran Mehta,PES20240038,kiran.mehta38@pes.edu,13.07090,77.79825
+Sana Reddy,PES20240039,sana.reddy39@pes.edu,13.07102,77.79830
+Vivek Joshi,PES20240040,vivek.joshi40@pes.edu,13.07114,77.79820
+Aarav Rao,PES20240041,aarav.rao41@pes.edu,13.10046,77.59586
+Kiara Malhotra,PES20240042,kiara.malhotra42@pes.edu,13.10058,77.59591
+Reyansh Das,PES20240043,reyansh.das43@pes.edu,13.10070,77.59596
+Aadhya Bose,PES20240044,aadhya.bose44@pes.edu,13.10082,77.59586
+Vivaan Desai,PES20240045,vivaan.desai45@pes.edu,13.10094,77.59591
+Anvi Bhat,PES20240046,anvi.bhat46@pes.edu,13.10046,77.59610
+Shaurya Nayak,PES20240047,shaurya.nayak47@pes.edu,13.10058,77.59600
+Ira Mehta,PES20240048,ira.mehta48@pes.edu,13.10070,77.59605
+Atharv Reddy,PES20240049,atharv.reddy49@pes.edu,13.10082,77.59610
+Navya Joshi,PES20240050,navya.joshi50@pes.edu,13.10094,77.59600
+Aisha Rao 51,PES20240051,aisha.rao51@pes.edu,12.93016,77.58336
+Rohan Malhotra 52,PES20240052,rohan.malhotra52@pes.edu,12.93028,77.58341
+Priya Das 53,PES20240053,priya.das53@pes.edu,12.93040,77.58346
+Arjun Bose 54,PES20240054,arjun.bose54@pes.edu,12.93052,77.58336
+Sneha Desai 55,PES20240055,sneha.desai55@pes.edu,12.93064,77.58341
+Neha Bhat 56,PES20240056,neha.bhat56@pes.edu,12.93016,77.58360
+Diya Nayak 57,PES20240057,diya.nayak57@pes.edu,12.93028,77.58350
+Karan Mehta 58,PES20240058,karan.mehta58@pes.edu,12.93040,77.58355
+Kabir Reddy 59,PES20240059,kabir.reddy59@pes.edu,12.93052,77.58360
+Meera Joshi 60,PES20240060,meera.joshi60@pes.edu,12.93064,77.58350
+Dev Rao 61,PES20240061,dev.rao61@pes.edu,13.03926,77.52086
+Ananya Malhotra 62,PES20240062,ananya.malhotra62@pes.edu,13.03938,77.52091
+Vikram Das 63,PES20240063,vikram.das63@pes.edu,13.03950,77.52096
+Ishaan Bose 64,PES20240064,ishaan.bose64@pes.edu,13.03962,77.52086
+Riya Desai 65,PES20240065,riya.desai65@pes.edu,13.03974,77.52091
+Aditya Bhat 66,PES20240066,aditya.bhat66@pes.edu,13.03926,77.52110
+Sara Nayak 67,PES20240067,sara.nayak67@pes.edu,13.03938,77.52100
+Harsh Mehta 68,PES20240068,harsh.mehta68@pes.edu,13.03950,77.52105
+Nisha Reddy 69,PES20240069,nisha.reddy69@pes.edu,13.03962,77.52110
+Rahul Joshi 70,PES20240070,rahul.joshi70@pes.edu,13.03974,77.52100
+Zara Rao 71,PES20240071,zara.rao71@pes.edu,12.96316,77.53706
+Omar Malhotra 72,PES20240072,omar.malhotra72@pes.edu,12.96328,77.53711
+Leela Das 73,PES20240073,leela.das73@pes.edu,12.96340,77.53716
+Manish Bose 74,PES20240074,manish.bose74@pes.edu,12.96352,77.53706
+Isha Desai 75,PES20240075,isha.desai75@pes.edu,12.96364,77.53711
+Varun Bhat 76,PES20240076,varun.bhat76@pes.edu,12.96316,77.53730
+Pooja Nayak 77,PES20240077,pooja.nayak77@pes.edu,12.96328,77.53720
+Siddharth Mehta 78,PES20240078,siddharth.mehta78@pes.edu,12.96340,77.53725
+Kavya Reddy 79,PES20240079,kavya.reddy79@pes.edu,12.96352,77.53730
+Aman Joshi 80,PES20240080,aman.joshi80@pes.edu,12.96364,77.53720
+Tanvi Rao 81,PES20240081,tanvi.rao81@pes.edu,12.94136,77.57336
+Nikhil Malhotra 82,PES20240082,nikhil.malhotra82@pes.edu,12.94148,77.57341
+Shruti Das 83,PES20240083,shruti.das83@pes.edu,12.94160,77.57346
+Yash Bose 84,PES20240084,yash.bose84@pes.edu,12.94172,77.57336
+Anika Desai 85,PES20240085,anika.desai85@pes.edu,12.94184,77.57341
+Rajat Bhat 86,PES20240086,rajat.bhat86@pes.edu,12.94136,77.57360
+Myra Nayak 87,PES20240087,myra.nayak87@pes.edu,12.94148,77.57350
+Kiran Mehta 88,PES20240088,kiran.mehta88@pes.edu,12.94160,77.57355
+Sana Reddy 89,PES20240089,sana.reddy89@pes.edu,12.94172,77.57360
+Vivek Joshi 90,PES20240090,vivek.joshi90@pes.edu,12.94184,77.57350
+Aarav Rao 91,PES20240091,aarav.rao91@pes.edu,12.90716,77.48566
+Kiara Malhotra 92,PES20240092,kiara.malhotra92@pes.edu,12.90728,77.48571
+Reyansh Das 93,PES20240093,reyansh.das93@pes.edu,12.90740,77.48576
+Aadhya Bose 94,PES20240094,aadhya.bose94@pes.edu,12.90752,77.48566
+Vivaan Desai 95,PES20240095,vivaan.desai95@pes.edu,12.90764,77.48571
+Anvi Bhat 96,PES20240096,anvi.bhat96@pes.edu,12.90716,77.48590
+Shaurya Nayak 97,PES20240097,shaurya.nayak97@pes.edu,12.90728,77.48580
+Ira Mehta 98,PES20240098,ira.mehta98@pes.edu,12.90740,77.48585
+Atharv Reddy 99,PES20240099,atharv.reddy99@pes.edu,12.90752,77.48590
+Navya Joshi 100,PES20240100,navya.joshi100@pes.edu,12.90764,77.48580
+Aisha Rao 101,PES20240101,aisha.rao101@pes.edu,12.94796,77.50136
+Rohan Malhotra 102,PES20240102,rohan.malhotra102@pes.edu,12.94808,77.50141
+Priya Das 103,PES20240103,priya.das103@pes.edu,12.94820,77.50146
+Arjun Bose 104,PES20240104,arjun.bose104@pes.edu,12.94832,77.50136
+Sneha Desai 105,PES20240105,sneha.desai105@pes.edu,12.94844,77.50141
+Neha Bhat 106,PES20240106,neha.bhat106@pes.edu,12.94796,77.50160
+Diya Nayak 107,PES20240107,diya.nayak107@pes.edu,12.94808,77.50150
+Karan Mehta 108,PES20240108,karan.mehta108@pes.edu,12.94820,77.50155
+Kabir Reddy 109,PES20240109,kabir.reddy109@pes.edu,12.94832,77.50160
+Meera Joshi 110,PES20240110,meera.joshi110@pes.edu,12.94844,77.50150
+Dev Rao 111,PES20240111,dev.rao111@pes.edu,12.95356,77.51306
+Ananya Malhotra 112,PES20240112,ananya.malhotra112@pes.edu,12.95368,77.51311
+Vikram Das 113,PES20240113,vikram.das113@pes.edu,12.95380,77.51316
+Ishaan Bose 114,PES20240114,ishaan.bose114@pes.edu,12.95392,77.51306
+Riya Desai 115,PES20240115,riya.desai115@pes.edu,12.95404,77.51311
+Aditya Bhat 116,PES20240116,aditya.bhat116@pes.edu,12.95356,77.51330
+Sara Nayak 117,PES20240117,sara.nayak117@pes.edu,12.95368,77.51320
+Harsh Mehta 118,PES20240118,harsh.mehta118@pes.edu,12.95380,77.51325
+Nisha Reddy 119,PES20240119,nisha.reddy119@pes.edu,12.95392,77.51330
+Rahul Joshi 120,PES20240120,rahul.joshi120@pes.edu,12.95404,77.51320
+Zara Rao 121,PES20240121,zara.rao121@pes.edu,12.92656,77.51936
+Omar Malhotra 122,PES20240122,omar.malhotra122@pes.edu,12.92668,77.51941
+Leela Das 123,PES20240123,leela.das123@pes.edu,12.92680,77.51946
+Manish Bose 124,PES20240124,manish.bose124@pes.edu,12.92692,77.51936
+Isha Desai 125,PES20240125,isha.desai125@pes.edu,12.92704,77.51941
+Varun Bhat 126,PES20240126,varun.bhat126@pes.edu,12.92656,77.51960
+Pooja Nayak 127,PES20240127,pooja.nayak127@pes.edu,12.92668,77.51950
+Siddharth Mehta 128,PES20240128,siddharth.mehta128@pes.edu,12.92680,77.51955
+Kavya Reddy 129,PES20240129,kavya.reddy129@pes.edu,12.92692,77.51960
+Aman Joshi 130,PES20240130,aman.joshi130@pes.edu,12.92704,77.51950
+Tanvi Rao 131,PES20240131,tanvi.rao131@pes.edu,12.92526,77.54866
+Nikhil Malhotra 132,PES20240132,nikhil.malhotra132@pes.edu,12.92538,77.54871
+Shruti Das 133,PES20240133,shruti.das133@pes.edu,12.92550,77.54876
+Yash Bose 134,PES20240134,yash.bose134@pes.edu,12.92562,77.54866
+Anika Desai 135,PES20240135,anika.desai135@pes.edu,12.92574,77.54871
+Rajat Bhat 136,PES20240136,rajat.bhat136@pes.edu,12.92526,77.54890
+Myra Nayak 137,PES20240137,myra.nayak137@pes.edu,12.92538,77.54880
+Kiran Mehta 138,PES20240138,kiran.mehta138@pes.edu,12.92550,77.54885
+Sana Reddy 139,PES20240139,sana.reddy139@pes.edu,12.92562,77.54890
+Vivek Joshi 140,PES20240140,vivek.joshi140@pes.edu,12.92574,77.54880
+Aarav Rao 141,PES20240141,aarav.rao141@pes.edu,12.91636,77.60996
+Kiara Malhotra 142,PES20240142,kiara.malhotra142@pes.edu,12.91648,77.61001
+Reyansh Das 143,PES20240143,reyansh.das143@pes.edu,12.91660,77.61006
+Aadhya Bose 144,PES20240144,aadhya.bose144@pes.edu,12.91672,77.60996
+Vivaan Desai 145,PES20240145,vivaan.desai145@pes.edu,12.91684,77.61001
+Anvi Bhat 146,PES20240146,anvi.bhat146@pes.edu,12.91636,77.61020
+Shaurya Nayak 147,PES20240147,shaurya.nayak147@pes.edu,12.91648,77.61010
+Ira Mehta 148,PES20240148,ira.mehta148@pes.edu,12.91660,77.61015
+Atharv Reddy 149,PES20240149,atharv.reddy149@pes.edu,12.91672,77.61020
+Navya Joshi 150,PES20240150,navya.joshi150@pes.edu,12.91684,77.61010

@@ -40,7 +40,7 @@ async def import_students(
         filename=filename,
         content=content,
     )
-    return ImportBatchOut.model_validate(batch)
+    return ImportBatchOut.model_validate(import_service.serialize_batch(db, batch))
 
 
 @router.get(
@@ -52,9 +52,19 @@ def list_import_batches(
     db: DbSession,
     _admin: Annotated[User, Depends(require_college_admin_access)],
     campus_id: uuid.UUID | None = Query(default=None),
+    active_only: bool = Query(
+        default=False,
+        description="If true, only completed batches with unlocked students.",
+    ),
 ) -> list[ImportBatchOut]:
     rows = import_service.list_batches(db, college_id, campus_id=campus_id)
-    return [ImportBatchOut.model_validate(r) for r in rows]
+    out = [
+        ImportBatchOut.model_validate(import_service.serialize_batch(db, r))
+        for r in rows
+    ]
+    if active_only:
+        out = [b for b in out if b.is_active]
+    return out
 
 
 @router.get(
@@ -68,7 +78,7 @@ def get_import_batch(
     _admin: Annotated[User, Depends(require_college_admin_access)],
 ) -> ImportBatchOut:
     batch = import_service.get_batch(db, college_id, batch_id)
-    return ImportBatchOut.model_validate(batch)
+    return ImportBatchOut.model_validate(import_service.serialize_batch(db, batch))
 
 
 @router.get("/colleges/{college_id}/students", response_model=list[StudentOut])

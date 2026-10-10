@@ -95,10 +95,10 @@ export default function DepotLocationPicker({
           <TextField
             {...params}
             label="Search place or address"
-            placeholder="e.g. PES University Ring Road"
+            placeholder="e.g. PES University"
             helperText={
               searchError ??
-              "OpenStreetMap search — select a result to place the depot."
+              "OpenStreetMap search (India / Bangalore biased). Select a result, then Apply & save."
             }
             error={Boolean(searchError)}
           />

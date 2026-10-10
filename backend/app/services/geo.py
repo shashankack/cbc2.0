@@ -115,3 +115,65 @@ def nearest_neighbor_order(
         )
         ordered.append(remaining.pop(0))
     return ordered
+
+
+def path_length_m(points: list[Point], depot: Point | None = None) -> float:
+    if not points:
+        return 0.0
+    total = 0.0
+    prev = depot
+    for p in points:
+        if prev is not None:
+            total += haversine_m(prev.lat, prev.lng, p.lat, p.lng)
+        prev = p
+    if depot is not None and points:
+        total += haversine_m(points[-1].lat, points[-1].lng, depot.lat, depot.lng)
+    return total
+
+
+def two_opt_order(
+    stops: list[Point],
+    depot: Point | None = None,
+    *,
+    max_passes: int = 20,
+) -> list[Point]:
+    """Improve an ordered stop list with a simple 2-opt pass (Haversine)."""
+    if len(stops) < 3:
+        return stops[:]
+    best = stops[:]
+    best_len = path_length_m(best, depot)
+    improved = True
+    passes = 0
+    while improved and passes < max_passes:
+        improved = False
+        passes += 1
+        for i in range(len(best) - 1):
+            for j in range(i + 2, len(best)):
+                candidate = best[: i + 1] + list(reversed(best[i + 1 : j + 1])) + best[j + 1 :]
+                cand_len = path_length_m(candidate, depot)
+                if cand_len + 1e-6 < best_len:
+                    best = candidate
+                    best_len = cand_len
+                    improved = True
+                    break
+            if improved:
+                break
+    return best
+
+
+def split_ordered_by_gap(
+    ordered: list[Point],
+    *,
+    max_gap_m: float,
+) -> list[list[Point]]:
+    """Split an NN tour into geographic chains when consecutive gap is large."""
+    if not ordered:
+        return []
+    chains: list[list[Point]] = [[ordered[0]]]
+    for prev, nxt in zip(ordered, ordered[1:], strict=False):
+        gap = haversine_m(prev.lat, prev.lng, nxt.lat, nxt.lng)
+        if gap > max_gap_m:
+            chains.append([nxt])
+        else:
+            chains[-1].append(nxt)
+    return chains

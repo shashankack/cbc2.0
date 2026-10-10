@@ -104,6 +104,11 @@ export type ImportBatch = {
   valid_count: number;
   error_count: number;
   created_at: string;
+  campus_code?: string | null;
+  campus_name?: string | null;
+  active_student_count?: number;
+  locked_student_count?: number;
+  is_active?: boolean;
 };
 
 export type Student = {
