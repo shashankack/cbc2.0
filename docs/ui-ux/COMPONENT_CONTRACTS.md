@@ -1,5 +1,11 @@
 # Component contracts (UI handoff)
 
+## Ownership
+
+- UI/UX edits **only** `frontend/components/` on `feat/ui-design-system`.
+- Project owner must **not** modify `frontend/components/`; import components into `frontend/app/` and `frontend/features/` instead.
+- See [../development/TEAM_OWNERSHIP.md](../development/TEAM_OWNERSHIP.md).
+
 For each shared or feature component, provide:
 
 1. Figma frame/link or screenshots

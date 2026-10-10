@@ -34,5 +34,7 @@ See [SETUP_GUIDE.md](docs/development/SETUP_GUIDE.md). This repo is built stage-
 - `main` — integration (PR only)
 - `production` — reserved for a future deploy/release branch
 - `feat/ml-demand-forecast` — ML
-- `feat/ui-design-system` — MUI / UI
+- `feat/ui-design-system` — MUI components only (`frontend/components/`)
 - `feat/demo-qa-docs` — demo data, tests, docs
+
+Ownership & teammate prompts: [docs/development/TEAM_OWNERSHIP.md](docs/development/TEAM_OWNERSHIP.md) · [docs/development/TEAMMATE_PROMPTS.md](docs/development/TEAMMATE_PROMPTS.md)

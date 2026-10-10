@@ -1,0 +1,14 @@
+# File ownership for review routing and conflict avoidance.
+# GitHub usernames should be updated once teammates join the repo.
+
+# UI/UX exclusive zone — owner must not modify these paths.
+frontend/components/ @shashankack
+
+# Note: Replace the UI teammate GitHub handle below when known, e.g.:
+# frontend/components/ @ui-teammate-handle
+
+# ML zone
+ml-service/ @shashankack
+
+# Default — project owner
+* @shashankack
