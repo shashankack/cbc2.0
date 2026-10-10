@@ -232,40 +232,40 @@ def run_planning(
     bus_iter = list(buses)
     bus_idx = 0
 
+    def _mark_students_for_review(student_ids: list[uuid.UUID]) -> None:
+        for sid in student_ids:
+            item = db.scalar(
+                select(PlanningRunItem).where(
+                    PlanningRunItem.planning_run_id == run.id,
+                    PlanningRunItem.student_id == sid,
+                )
+            )
+            if item is None:
+                continue
+            if item.status != PlanningItemStatus.NEEDS_ADMIN_REVIEW:
+                item.status = PlanningItemStatus.NEEDS_ADMIN_REVIEW
+                student_by_id[sid].status = StudentStatus.NEEDS_ADMIN_REVIEW
+
     for seq_base, sp in enumerate(ordered_stops):
         stop_id = sp.id  # type: ignore[assignment]
         member_ids = members_by_stop.get(stop_id, [])
         if len(member_ids) < settings.min_students_per_route:
             # Mark those items as needs review if too small for a route
-            items = db.scalars(
-                select(PlanningRunItem).where(
-                    PlanningRunItem.planning_run_id == run.id,
-                    PlanningRunItem.stop_id == stop_id,
-                )
-            ).all()
-            for item in items:
-                if item.status != PlanningItemStatus.NEEDS_ADMIN_REVIEW:
-                    item.status = PlanningItemStatus.NEEDS_ADMIN_REVIEW
-                    student_by_id[item.student_id].status = StudentStatus.NEEDS_ADMIN_REVIEW
+            _mark_students_for_review(member_ids)
             continue
 
         if bus_idx >= len(bus_iter):
-            raise AppError(
-                "CONFLICT",
-                "Not enough available buses for proposed routes.",
-                status_code=409,
-            )
+            # Keep a partial proposal; leftover stops need admin follow-up.
+            _mark_students_for_review(member_ids)
+            continue
 
         # May need multiple buses if headcount > capacity
         remaining = member_ids[:]
         route_num = 1
         while remaining:
             if bus_idx >= len(bus_iter):
-                raise AppError(
-                    "CONFLICT",
-                    "Not enough available buses for proposed routes.",
-                    status_code=409,
-                )
+                _mark_students_for_review(remaining)
+                break
             bus = bus_iter[bus_idx]
             bus_idx += 1
             chunk = remaining[: bus.capacity]

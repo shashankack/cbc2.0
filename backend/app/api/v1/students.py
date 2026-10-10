@@ -44,6 +44,20 @@ async def import_students(
 
 
 @router.get(
+    "/colleges/{college_id}/imports/students",
+    response_model=list[ImportBatchOut],
+)
+def list_import_batches(
+    college_id: uuid.UUID,
+    db: DbSession,
+    _admin: Annotated[User, Depends(require_college_admin_access)],
+    campus_id: uuid.UUID | None = Query(default=None),
+) -> list[ImportBatchOut]:
+    rows = import_service.list_batches(db, college_id, campus_id=campus_id)
+    return [ImportBatchOut.model_validate(r) for r in rows]
+
+
+@router.get(
     "/colleges/{college_id}/imports/students/{batch_id}",
     response_model=ImportBatchOut,
 )

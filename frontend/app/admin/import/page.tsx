@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Alert from "@mui/material/Alert";
 import Button from "@mui/material/Button";
+import MenuItem from "@mui/material/MenuItem";
 import Stack from "@mui/material/Stack";
 import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
@@ -79,7 +80,7 @@ export default function AdminImportPage() {
     <PortalShell title="College admin" description="Excel / CSV intake" nav={nav}>
       <PageHeader
         title="Student import"
-        description="CSV/XLSX columns: name, srn, email, lat, lng. Requires an active domain and campus settings."
+        description="CSV/XLSX columns: name, srn, email, lat, lng. Import to the campus that also has available buses before planning."
       />
       {error ? (
         <Alert severity="error" sx={{ mb: 2 }}>
@@ -90,12 +91,23 @@ export default function AdminImportPage() {
         <SectionCard title="Upload file">
           <Stack spacing={2}>
             <TextField
-              label="Campus ID"
+              select
+              label="Campus"
               value={campusId}
               onChange={(e) => setCampusId(e.target.value)}
-              helperText={campuses.map((c) => `${c.code}`).join(", ")}
+              helperText={
+                campuses.length
+                  ? "Students and buses must share this campus for planning."
+                  : "Create a campus first"
+              }
               fullWidth
-            />
+            >
+              {campuses.map((c) => (
+                <MenuItem key={c.id} value={c.id}>
+                  {c.name} ({c.code})
+                </MenuItem>
+              ))}
+            </TextField>
             <Button variant="outlined" component="label" sx={{ alignSelf: "flex-start" }}>
               Choose file
               <input
@@ -111,7 +123,7 @@ export default function AdminImportPage() {
             <Button
               variant="contained"
               onClick={() => void upload()}
-              disabled={!file}
+              disabled={!file || !campusId}
               sx={{ alignSelf: "flex-start" }}
             >
               Upload
@@ -125,6 +137,13 @@ export default function AdminImportPage() {
               invalidCount={batch.error_count}
               totalCount={batch.row_count}
             />
+            <Button
+              sx={{ mt: 2 }}
+              variant="contained"
+              href={`/admin/planning?campusId=${batch.campus_id}&batchId=${batch.id}`}
+            >
+              Continue to planning
+            </Button>
           </SectionCard>
         ) : null}
       </Stack>

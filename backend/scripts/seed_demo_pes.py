@@ -309,9 +309,10 @@ def main() -> None:
     print("Steps:")
     print(f"  1. Login as {ADMIN_EMAIL} (OTP in uvicorn log)")
     print("  2. Admin -> Import")
-    print(f"  3. Campus ID = {campus_id}")
+    print(f"  3. Select campus {CAMPUS_CODE} ({campus_id})")
     print("  4. Upload the CSV above")
-    print("  5. Admin -> Planning -> Run clustering / assignment")
+    print("  5. Continue to Planning (or Admin -> Planning)")
+    print("  6. Run clustering / assignment, then Confirm")
 
 
 if __name__ == "__main__":

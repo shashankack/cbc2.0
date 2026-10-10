@@ -253,6 +253,22 @@ def get_batch(
     return batch
 
 
+def list_batches(
+    db: Session,
+    college_id: uuid.UUID,
+    *,
+    campus_id: uuid.UUID | None = None,
+) -> list[StudentImportBatch]:
+    stmt = (
+        select(StudentImportBatch)
+        .where(StudentImportBatch.college_id == college_id)
+        .order_by(StudentImportBatch.created_at.desc())
+    )
+    if campus_id is not None:
+        stmt = stmt.where(StudentImportBatch.campus_id == campus_id)
+    return list(db.scalars(stmt).all())
+
+
 def list_students(
     db: Session,
     college_id: uuid.UUID,
