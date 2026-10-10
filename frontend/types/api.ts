@@ -79,6 +79,17 @@ export type Bus = {
   status: string;
   driver_user_id: string | null;
   created_at: string;
+  driver_email?: string | null;
+  campus_code?: string | null;
+  campus_name?: string | null;
+};
+
+export type Driver = {
+  user_id: string;
+  email: string;
+  full_name: string | null;
+  assigned_bus_id: string | null;
+  assigned_bus_registration: string | null;
 };
 
 export type ImportBatch = {

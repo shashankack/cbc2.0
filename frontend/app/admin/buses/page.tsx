@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Alert from "@mui/material/Alert";
 import Button from "@mui/material/Button";
+import ButtonGroup from "@mui/material/ButtonGroup";
+import MenuItem from "@mui/material/MenuItem";
 import Stack from "@mui/material/Stack";
 import Table from "@mui/material/Table";
 import TableBody from "@mui/material/TableBody";
@@ -12,6 +14,8 @@ import TableContainer from "@mui/material/TableContainer";
 import TableHead from "@mui/material/TableHead";
 import TableRow from "@mui/material/TableRow";
 import TextField from "@mui/material/TextField";
+import Typography from "@mui/material/Typography";
+import { ADMIN_NAV } from "@/features/admin/nav";
 import PortalShell from "@/features/shell/PortalShell";
 import {
   EmptyState,
@@ -19,18 +23,23 @@ import {
   SectionCard,
   StatusChip,
 } from "@/features/ui";
-import { apiGet, apiPost, ApiError } from "@/lib/api";
+import { apiGet, apiPatch, apiPost, ApiError } from "@/lib/api";
 import { primaryCollegeId, resolveHomePath, useAuth } from "@/lib/auth";
 import { hasRole } from "@/lib/roles";
-import type { Bus, Campus } from "@/types/api";
+import type { Bus, Campus, Driver } from "@/types/api";
 
-const nav = [
-  { href: "/admin", label: "Campuses" },
-  { href: "/admin/buses", label: "Buses" },
-  { href: "/admin/import", label: "Import" },
-  { href: "/admin/planning", label: "Planning" },
-  { href: "/admin/emergency", label: "Emergency" },
-];
+/** Admin-settable fleet statuses (in_service is trip-managed). */
+const ADMIN_BUS_STATUSES = [
+  { value: "available", label: "Available" },
+  { value: "unavailable", label: "Unavailable (maintenance)" },
+] as const;
+
+function statusLabel(status: string): string {
+  if (status === "unavailable") return "Unavailable (maintenance)";
+  if (status === "in_service") return "In service";
+  if (status === "available") return "Available";
+  return status.replaceAll("_", " ");
+}
 
 export default function AdminBusesPage() {
   const router = useRouter();
@@ -38,20 +47,36 @@ export default function AdminBusesPage() {
   const collegeId = user ? primaryCollegeId(user) : null;
   const [buses, setBuses] = useState<Bus[]>([]);
   const [campuses, setCampuses] = useState<Campus[]>([]);
+  const [drivers, setDrivers] = useState<Driver[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
   const [registration, setRegistration] = useState("");
   const [capacity, setCapacity] = useState("40");
   const [driverEmail, setDriverEmail] = useState("");
   const [campusId, setCampusId] = useState("");
+  const [drafts, setDrafts] = useState<
+    Record<string, { status: string; capacity: string; driver_email: string }>
+  >({});
 
   async function load(cid: string) {
-    const [b, c] = await Promise.all([
+    const [b, c, d] = await Promise.all([
       apiGet<Bus[]>(`/colleges/${cid}/buses`),
       apiGet<Campus[]>(`/colleges/${cid}/campuses`),
+      apiGet<Driver[]>(`/colleges/${cid}/drivers`),
     ]);
     setBuses(b);
     setCampuses(c);
+    setDrivers(d);
     if (!campusId && c[0]) setCampusId(c[0].id);
+    const next: typeof drafts = {};
+    for (const bus of b) {
+      next[bus.id] = {
+        status: bus.status === "in_service" ? "in_service" : bus.status,
+        capacity: String(bus.capacity),
+        driver_email: bus.driver_email ?? "",
+      };
+    }
+    setDrafts(next);
   }
 
   useEffect(() => {
@@ -82,26 +107,82 @@ export default function AdminBusesPage() {
       });
       await load(collegeId);
       setRegistration("");
+      setDriverEmail("");
       setError(null);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Create failed.");
     }
   }
 
+  async function setBusStatus(bus: Bus, status: "available" | "unavailable") {
+    if (!collegeId) return;
+    setBusyId(bus.id);
+    try {
+      await apiPatch(`/colleges/${collegeId}/buses/${bus.id}`, { status });
+      setError(null);
+      await load(collegeId);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Status update failed.");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function saveBus(bus: Bus) {
+    if (!collegeId) return;
+    const draft = drafts[bus.id];
+    if (!draft) return;
+    setBusyId(bus.id);
+    try {
+      const body: {
+        status?: string;
+        capacity: number;
+        driver_email?: string | null;
+        clear_driver?: boolean;
+      } = {
+        capacity: Number(draft.capacity),
+      };
+      if (draft.status === "available" || draft.status === "unavailable") {
+        body.status = draft.status;
+      }
+      if (!draft.driver_email.trim()) {
+        body.clear_driver = true;
+      } else {
+        body.driver_email = draft.driver_email.trim();
+      }
+      await apiPatch(`/colleges/${collegeId}/buses/${bus.id}`, body);
+      setError(null);
+      await load(collegeId);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Update failed.");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   if (loading || !user) return null;
   if (!collegeId) {
     return (
-      <PortalShell title="College admin" nav={nav}>
+      <PortalShell title="College admin" nav={[...ADMIN_NAV]}>
         <Alert severity="warning">No college membership on this account.</Alert>
       </PortalShell>
     );
   }
 
+  const unavailableCount = buses.filter((b) => b.status === "unavailable").length;
+  const availableCount = buses.filter((b) => b.status === "available").length;
+  const inServiceCount = buses.filter((b) => b.status === "in_service").length;
+
   return (
-    <PortalShell title="College admin" description="Fleet capacity" nav={nav}>
+    <PortalShell title="College admin" description="Fleet capacity" nav={[...ADMIN_NAV]}>
       <PageHeader
         title="Buses"
-        description="Assign a driver email to enable trip sessions."
+        description="Manage capacity, maintenance availability, and driver assignment. One driver maps to one bus."
+        actions={
+          <Button href="/admin/drivers" variant="outlined">
+            Manage drivers
+          </Button>
+        }
       />
       {error ? (
         <Alert severity="error" sx={{ mb: 2 }}>
@@ -114,51 +195,183 @@ export default function AdminBusesPage() {
           {buses.length === 0 ? (
             <EmptyState
               title="No buses yet"
-              description="Add a registration number, capacity, and optional driver email."
+              description="Add a registration number, capacity, and optional driver."
             />
           ) : (
-            <TableContainer>
-              <Table size="small">
-                <TableHead>
-                  <TableRow>
-                    <TableCell>Registration</TableCell>
-                    <TableCell>Capacity</TableCell>
-                    <TableCell>Status</TableCell>
-                    <TableCell>Driver</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {buses.map((b) => (
-                    <TableRow key={b.id} hover>
-                      <TableCell>{b.registration_number}</TableCell>
-                      <TableCell>{b.capacity}</TableCell>
-                      <TableCell>
-                        <StatusChip status={b.status} />
-                      </TableCell>
-                      <TableCell>
-                        {b.driver_user_id ? (
-                          <TypographyMono value={b.driver_user_id} />
-                        ) : (
-                          "—"
-                        )}
-                      </TableCell>
+            <Stack spacing={2}>
+              <Typography variant="body2" color="text.secondary">
+                {availableCount} available · {unavailableCount} unavailable
+                (maintenance) · {inServiceCount} in service
+              </Typography>
+              <TableContainer>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Registration</TableCell>
+                      <TableCell>Campus</TableCell>
+                      <TableCell>Capacity</TableCell>
+                      <TableCell>Availability</TableCell>
+                      <TableCell>Driver</TableCell>
+                      <TableCell align="right">Actions</TableCell>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
+                  </TableHead>
+                  <TableBody>
+                    {buses.map((b) => {
+                      const draft = drafts[b.id] ?? {
+                        status: b.status,
+                        capacity: String(b.capacity),
+                        driver_email: b.driver_email ?? "",
+                      };
+                      const selectValue =
+                        draft.status === "in_service"
+                          ? "in_service"
+                          : draft.status === "unavailable"
+                            ? "unavailable"
+                            : "available";
+                      const rowBusy = busyId === b.id;
+                      return (
+                        <TableRow key={b.id} hover>
+                          <TableCell>{b.registration_number}</TableCell>
+                          <TableCell>
+                            {b.campus_code ?? b.campus_id.slice(0, 8)}
+                          </TableCell>
+                          <TableCell sx={{ minWidth: 96 }}>
+                            <TextField
+                              size="small"
+                              value={draft.capacity}
+                              onChange={(e) =>
+                                setDrafts((prev) => ({
+                                  ...prev,
+                                  [b.id]: { ...draft, capacity: e.target.value },
+                                }))
+                              }
+                            />
+                          </TableCell>
+                          <TableCell sx={{ minWidth: 220 }}>
+                            <Stack spacing={1}>
+                              <TextField
+                                select
+                                size="small"
+                                label="Status"
+                                value={selectValue}
+                                onChange={(e) =>
+                                  setDrafts((prev) => ({
+                                    ...prev,
+                                    [b.id]: {
+                                      ...draft,
+                                      status: e.target.value,
+                                    },
+                                  }))
+                                }
+                                fullWidth
+                                helperText={
+                                  b.status === "in_service"
+                                    ? "Trip is active; you can still mark unavailable."
+                                    : "Unavailable = maintenance / not in fleet"
+                                }
+                              >
+                                {b.status === "in_service" ? (
+                                  <MenuItem value="in_service" disabled>
+                                    <StatusChip
+                                      status="in_service"
+                                      label={statusLabel("in_service")}
+                                    />
+                                  </MenuItem>
+                                ) : null}
+                                {ADMIN_BUS_STATUSES.map((s) => (
+                                  <MenuItem key={s.value} value={s.value}>
+                                    <StatusChip
+                                      status={s.value}
+                                      label={s.label}
+                                    />
+                                  </MenuItem>
+                                ))}
+                              </TextField>
+                              <ButtonGroup size="small" variant="outlined">
+                                <Button
+                                  disabled={
+                                    rowBusy || b.status === "unavailable"
+                                  }
+                                  onClick={() =>
+                                    void setBusStatus(b, "unavailable")
+                                  }
+                                >
+                                  Mark unavailable
+                                </Button>
+                                <Button
+                                  disabled={
+                                    rowBusy || b.status === "available"
+                                  }
+                                  onClick={() =>
+                                    void setBusStatus(b, "available")
+                                  }
+                                >
+                                  Mark available
+                                </Button>
+                              </ButtonGroup>
+                            </Stack>
+                          </TableCell>
+                          <TableCell sx={{ minWidth: 220 }}>
+                            <TextField
+                              select
+                              size="small"
+                              value={draft.driver_email}
+                              onChange={(e) =>
+                                setDrafts((prev) => ({
+                                  ...prev,
+                                  [b.id]: {
+                                    ...draft,
+                                    driver_email: e.target.value,
+                                  },
+                                }))
+                              }
+                              fullWidth
+                            >
+                              <MenuItem value="">Unassigned</MenuItem>
+                              {drivers.map((d) => (
+                                <MenuItem key={d.user_id} value={d.email}>
+                                  {d.email}
+                                </MenuItem>
+                              ))}
+                            </TextField>
+                          </TableCell>
+                          <TableCell align="right">
+                            <Button
+                              size="small"
+                              disabled={rowBusy}
+                              onClick={() => void saveBus(b)}
+                            >
+                              Save
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            </Stack>
           )}
         </SectionCard>
 
         <SectionCard title="Add bus">
           <Stack spacing={2}>
             <TextField
-              label="Campus ID"
+              select
+              label="Campus"
               value={campusId}
               onChange={(e) => setCampusId(e.target.value)}
-              helperText={campuses.map((c) => `${c.code}`).join(", ") || "Create a campus first"}
+              helperText={
+                campuses.length ? undefined : "Create a campus first"
+              }
               fullWidth
-            />
+            >
+              {campuses.map((c) => (
+                <MenuItem key={c.id} value={c.id}>
+                  {c.name} ({c.code})
+                </MenuItem>
+              ))}
+            </TextField>
             <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
               <TextField
                 label="Registration"
@@ -173,12 +386,23 @@ export default function AdminBusesPage() {
                 fullWidth
               />
               <TextField
-                label="Driver email"
+                select
+                label="Driver"
                 value={driverEmail}
                 onChange={(e) => setDriverEmail(e.target.value)}
                 fullWidth
-              />
+              >
+                <MenuItem value="">None yet</MenuItem>
+                {drivers.map((d) => (
+                  <MenuItem key={d.user_id} value={d.email}>
+                    {d.email}
+                  </MenuItem>
+                ))}
+              </TextField>
             </Stack>
+            <Typography variant="caption" color="text.secondary">
+              New buses start as available. Use Mark unavailable for maintenance.
+            </Typography>
             <Button
               variant="contained"
               onClick={() => void createBus()}
@@ -190,13 +414,5 @@ export default function AdminBusesPage() {
         </SectionCard>
       </Stack>
     </PortalShell>
-  );
-}
-
-function TypographyMono({ value }: { value: string }) {
-  return (
-    <span style={{ fontFamily: "var(--font-geist-mono), monospace", fontSize: 12 }}>
-      {value.slice(0, 8)}…
-    </span>
   );
 }

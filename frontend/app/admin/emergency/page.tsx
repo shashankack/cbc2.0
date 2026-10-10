@@ -8,19 +8,14 @@ import Stack from "@mui/material/Stack";
 import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 import { EmergencyReallocationCard } from "@/components/planning";
+import { ADMIN_NAV } from "@/features/admin/nav";
 import PortalShell from "@/features/shell/PortalShell";
 import { PageHeader, SectionCard, StatusChip } from "@/features/ui";
 import { apiPost, ApiError } from "@/lib/api";
 import { primaryCollegeId, resolveHomePath, useAuth } from "@/lib/auth";
 import { hasRole } from "@/lib/roles";
 
-const nav = [
-  { href: "/admin", label: "Campuses" },
-  { href: "/admin/buses", label: "Buses" },
-  { href: "/admin/import", label: "Import" },
-  { href: "/admin/planning", label: "Planning" },
-  { href: "/admin/emergency", label: "Emergency" },
-];
+const nav = [...ADMIN_NAV];
 
 type EmergencyOut = {
   id: string;

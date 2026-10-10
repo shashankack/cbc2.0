@@ -56,8 +56,9 @@
 
 | Method | Path | Auth | Purpose |
 |--------|------|------|---------|
-| GET/POST | `/colleges/{college_id}/buses` | college_admin | List / create buses |
-| PATCH | `/colleges/{college_id}/buses/{bus_id}` | college_admin | Status / capacity / driver |
+| GET/POST | `/colleges/{college_id}/buses` | college_admin | List / create buses (`driver_email`, campus labels on list) |
+| PATCH | `/colleges/{college_id}/buses/{bus_id}` | college_admin | Status (`available` \| `unavailable` for maintenance/out of service), capacity, driver (`driver_email` or `clear_driver`). `in_service` is trip-managed. |
+| GET/POST | `/colleges/{college_id}/drivers` | college_admin | List / add driver roster (email → membership) |
 | POST | `/colleges/{college_id}/imports/students` | college_admin | Excel/CSV upload (`multipart`: `campus_id`, `file`) |
 | GET | `/colleges/{college_id}/imports/students/{batch_id}` | college_admin | Import batch status |
 | GET | `/colleges/{college_id}/students` | college_admin | List students |

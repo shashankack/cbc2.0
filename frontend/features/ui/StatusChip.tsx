@@ -28,6 +28,7 @@ const TONE: Record<
   in_service: "info",
   open: "warning",
   resolved: "success",
+  assigned: "info",
 };
 
 type StatusChipProps = {

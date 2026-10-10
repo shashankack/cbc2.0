@@ -33,6 +33,45 @@ def list_buses(
     return list(db.scalars(stmt).all())
 
 
+def bus_to_dict(db: Session, bus: Bus) -> dict:
+    driver = db.get(User, bus.driver_user_id) if bus.driver_user_id else None
+    campus = db.get(Campus, bus.campus_id)
+    return {
+        "id": bus.id,
+        "college_id": bus.college_id,
+        "campus_id": bus.campus_id,
+        "registration_number": bus.registration_number,
+        "capacity": bus.capacity,
+        "status": bus.status,
+        "driver_user_id": bus.driver_user_id,
+        "created_at": bus.created_at,
+        "driver_email": driver.email if driver else None,
+        "campus_code": campus.code if campus else None,
+        "campus_name": campus.name if campus else None,
+    }
+
+
+def _clear_driver_from_other_buses(
+    db: Session,
+    college_id: uuid.UUID,
+    driver_user_id: uuid.UUID,
+    *,
+    keep_bus_id: uuid.UUID | None = None,
+) -> None:
+    others = list(
+        db.scalars(
+            select(Bus).where(
+                Bus.college_id == college_id,
+                Bus.driver_user_id == driver_user_id,
+            )
+        ).all()
+    )
+    for other in others:
+        if keep_bus_id is not None and other.id == keep_bus_id:
+            continue
+        other.driver_user_id = None
+
+
 def create_bus(
     db: Session,
     college_id: uuid.UUID,
@@ -65,6 +104,7 @@ def create_bus(
             role=MembershipRole.DRIVER,
         )
         driver_user_id = driver.id
+        _clear_driver_from_other_buses(db, college_id, driver.id)
 
     bus = Bus(
         college_id=college_id,
@@ -97,8 +137,14 @@ def update_bus(
         raise AppError("NOT_FOUND", "Bus not found.", status_code=404)
 
     if status is not None:
-        if status not in {s.value for s in BusStatus}:
-            raise AppError("VALIDATION_ERROR", "Invalid bus status.", status_code=422)
+        allowed = {BusStatus.AVAILABLE.value, BusStatus.UNAVAILABLE.value}
+        if status not in allowed:
+            raise AppError(
+                "VALIDATION_ERROR",
+                "Set status to available or unavailable (maintenance). "
+                "in_service is managed by active trips.",
+                status_code=422,
+            )
         bus.status = status
     if capacity is not None:
         if capacity < 1:
@@ -113,6 +159,9 @@ def update_bus(
             college_id=college_id,
             user_id=driver.id,
             role=MembershipRole.DRIVER,
+        )
+        _clear_driver_from_other_buses(
+            db, college_id, driver.id, keep_bus_id=bus.id
         )
         bus.driver_user_id = driver.id
 

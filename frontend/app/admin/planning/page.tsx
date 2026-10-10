@@ -10,6 +10,7 @@ import Stack from "@mui/material/Stack";
 import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 import { PlanConfirmBar } from "@/components/planning";
+import { ADMIN_NAV } from "@/features/admin/nav";
 import PortalShell from "@/features/shell/PortalShell";
 import { centerFromPoints, routesToPolylines } from "@/features/maps";
 import { PageHeader, SectionCard, StatusChip } from "@/features/ui";
@@ -30,13 +31,7 @@ const PlanningProposalMap = dynamic(
   },
 );
 
-const nav = [
-  { href: "/admin", label: "Campuses" },
-  { href: "/admin/buses", label: "Buses" },
-  { href: "/admin/import", label: "Import" },
-  { href: "/admin/planning", label: "Planning" },
-  { href: "/admin/emergency", label: "Emergency" },
-];
+const nav = [...ADMIN_NAV];
 
 export default function AdminPlanningPage() {
   const router = useRouter();

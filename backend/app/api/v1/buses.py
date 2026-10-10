@@ -23,7 +23,7 @@ def list_buses(
     campus_id: uuid.UUID | None = Query(default=None),
 ) -> list[BusOut]:
     rows = fleet_service.list_buses(db, college_id, campus_id=campus_id)
-    return [BusOut.model_validate(r) for r in rows]
+    return [BusOut.model_validate(fleet_service.bus_to_dict(db, r)) for r in rows]
 
 
 @router.post("", response_model=BusOut, status_code=201)
@@ -41,7 +41,7 @@ def create_bus(
         capacity=body.capacity,
         driver_email=str(body.driver_email) if body.driver_email else None,
     )
-    return BusOut.model_validate(row)
+    return BusOut.model_validate(fleet_service.bus_to_dict(db, row))
 
 
 @router.patch("/{bus_id}", response_model=BusOut)
@@ -61,4 +61,4 @@ def update_bus(
         driver_email=str(body.driver_email) if body.driver_email else None,
         clear_driver=body.clear_driver,
     )
-    return BusOut.model_validate(row)
+    return BusOut.model_validate(fleet_service.bus_to_dict(db, row))

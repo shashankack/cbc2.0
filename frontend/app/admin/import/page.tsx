@@ -8,6 +8,7 @@ import Stack from "@mui/material/Stack";
 import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 import { ImportResultSummary } from "@/components/planning";
+import { ADMIN_NAV } from "@/features/admin/nav";
 import PortalShell from "@/features/shell/PortalShell";
 import { PageHeader, SectionCard } from "@/features/ui";
 import { apiGet, apiRequest, ApiError } from "@/lib/api";
@@ -15,13 +16,7 @@ import { primaryCollegeId, resolveHomePath, useAuth } from "@/lib/auth";
 import { hasRole } from "@/lib/roles";
 import type { Campus, ImportBatch } from "@/types/api";
 
-const nav = [
-  { href: "/admin", label: "Campuses" },
-  { href: "/admin/buses", label: "Buses" },
-  { href: "/admin/import", label: "Import" },
-  { href: "/admin/planning", label: "Planning" },
-  { href: "/admin/emergency", label: "Emergency" },
-];
+const nav = [...ADMIN_NAV];
 
 export default function AdminImportPage() {
   const router = useRouter();
