@@ -32,7 +32,11 @@ pip install -r requirements.txt
 uvicorn app.main:app --reload --port 8000
 ```
 
-http://localhost:8000/api/v1/health · http://localhost:8000/docs
+- Health: http://localhost:8000/api/v1/health
+- Ready: http://localhost:8000/api/v1/ready
+- OpenAPI: http://localhost:8000/docs
+
+API contract: [../api/API_CONTRACT.md](../api/API_CONTRACT.md)
 
 ## Not used
 

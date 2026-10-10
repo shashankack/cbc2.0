@@ -1,5 +1,7 @@
 # Data model (draft)
 
+API surface: [../api/API_CONTRACT.md](../api/API_CONTRACT.md).
+
 Use UUIDs. Tenant-owned tables carry `college_id`.
 
 ## Suggested entities
