@@ -186,7 +186,8 @@ function AdminPlanningPageInner() {
           } => s.lat != null && s.lng != null,
         )
         .map((s) => ({
-          id: `${route.id}-${s.stop_id}`,
+          // Include sequence: campus depot is listed at start and end with the same stop_id.
+          id: `${route.id}-${s.stop_id}-${s.sequence}`,
           sequence: s.sequence,
           label: s.name ?? s.stop_id.slice(0, 8),
           lat: s.lat,

@@ -14,6 +14,8 @@ export { DistressMarker } from "./DistressMarker";
 export type { DistressMarkerProps } from "./DistressMarker";
 export { MapLegend } from "./MapLegend";
 export type { MapLegendProps } from "./MapLegend";
+export { MapClickCapture } from "./MapClickCapture";
+export type { MapClickCaptureProps } from "./MapClickCapture";
 export { APPROX_DISCLAIMER, formatApproxDistance, formatApproxMinutes } from "./approxLabels";
 export type {
   MapLatLng,

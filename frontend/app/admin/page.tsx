@@ -1,9 +1,15 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import Alert from "@mui/material/Alert";
 import Button from "@mui/material/Button";
+import CircularProgress from "@mui/material/CircularProgress";
+import Dialog from "@mui/material/Dialog";
+import DialogActions from "@mui/material/DialogActions";
+import DialogContent from "@mui/material/DialogContent";
+import DialogTitle from "@mui/material/DialogTitle";
 import Stack from "@mui/material/Stack";
 import Table from "@mui/material/Table";
 import TableBody from "@mui/material/TableBody";
@@ -14,6 +20,7 @@ import TableRow from "@mui/material/TableRow";
 import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 import { ADMIN_NAV } from "@/features/admin/nav";
+import { roundCoord } from "@/features/maps/geo";
 import PortalShell from "@/features/shell/PortalShell";
 import {
   EmptyState,
@@ -27,6 +34,47 @@ import { hasRole } from "@/lib/roles";
 import type { Campus } from "@/types/api";
 
 const nav = [...ADMIN_NAV];
+
+const DepotLocationPicker = dynamic(
+  () => import("@/features/maps/DepotLocationPicker"),
+  {
+    ssr: false,
+    loading: () => (
+      <Stack sx={{ height: 360, alignItems: "center", justifyContent: "center" }}>
+        <CircularProgress size={28} aria-label="Loading map" />
+      </Stack>
+    ),
+  },
+);
+
+type DepotTarget =
+  | { kind: "campus"; campusId: string; title: string }
+  | { kind: "create"; title: string };
+
+function readBrowserLocation(): Promise<{ lat: number; lng: number }> {
+  return new Promise((resolve, reject) => {
+    if (typeof navigator === "undefined" || !navigator.geolocation) {
+      reject(new Error("Geolocation is not available in this browser."));
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      (pos) =>
+        resolve({
+          lat: roundCoord(pos.coords.latitude),
+          lng: roundCoord(pos.coords.longitude),
+        }),
+      (err) =>
+        reject(
+          new Error(
+            err.code === err.PERMISSION_DENIED
+              ? "Location permission denied."
+              : "Could not read current location.",
+          ),
+        ),
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 },
+    );
+  });
+}
 
 export default function AdminCampusesPage() {
   const router = useRouter();
@@ -46,6 +94,13 @@ export default function AdminCampusesPage() {
   const [coordDrafts, setCoordDrafts] = useState<
     Record<string, { lat: string; lng: string }>
   >({});
+  const [depotTarget, setDepotTarget] = useState<DepotTarget | null>(null);
+  const [pickerPoint, setPickerPoint] = useState<{
+    lat: number;
+    lng: number;
+  } | null>(null);
+  const [geoBusy, setGeoBusy] = useState(false);
+  const [geoError, setGeoError] = useState<string | null>(null);
 
   const collegeId = user ? primaryCollegeId(user) : null;
 
@@ -79,6 +134,58 @@ export default function AdminCampusesPage() {
     }
     if (collegeId) void load(collegeId);
   }, [loading, user, collegeId, router]);
+
+  function openDepotPicker(target: DepotTarget) {
+    setGeoError(null);
+    if (target.kind === "campus") {
+      const draft = coordDrafts[target.campusId];
+      const lat = draft?.lat ? Number(draft.lat) : NaN;
+      const lng = draft?.lng ? Number(draft.lng) : NaN;
+      setPickerPoint(
+        Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : null,
+      );
+    } else {
+      const lat = createLat ? Number(createLat) : NaN;
+      const lng = createLng ? Number(createLng) : NaN;
+      setPickerPoint(
+        Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : null,
+      );
+    }
+    setDepotTarget(target);
+  }
+
+  function applyPicker() {
+    if (!depotTarget || !pickerPoint) {
+      setGeoError("Click the map or use current location first.");
+      return;
+    }
+    const lat = String(pickerPoint.lat);
+    const lng = String(pickerPoint.lng);
+    if (depotTarget.kind === "campus") {
+      setCoordDrafts((prev) => ({
+        ...prev,
+        [depotTarget.campusId]: { lat, lng },
+      }));
+    } else {
+      setCreateLat(lat);
+      setCreateLng(lng);
+    }
+    setDepotTarget(null);
+    setGeoError(null);
+  }
+
+  async function useCurrentLocation() {
+    setGeoBusy(true);
+    setGeoError(null);
+    try {
+      const point = await readBrowserLocation();
+      setPickerPoint(point);
+    } catch (err) {
+      setGeoError(err instanceof Error ? err.message : "Location failed.");
+    } finally {
+      setGeoBusy(false);
+    }
+  }
 
   async function createCampus() {
     if (!collegeId) return;
@@ -174,7 +281,7 @@ export default function AdminCampusesPage() {
     >
       <PageHeader
         title="Campuses & domain"
-        description="Set campus depot coordinates so every planned route starts and ends at campus."
+        description="Set campus depot coordinates so every planned route starts and ends at campus. Use the map or your current location."
       />
       {error ? (
         <Alert severity="error" sx={{ mb: 2 }}>
@@ -255,6 +362,19 @@ export default function AdminCampusesPage() {
                           <Stack spacing={0.5} sx={{ alignItems: "flex-end" }}>
                             <Button
                               size="small"
+                              variant="outlined"
+                              onClick={() =>
+                                openDepotPicker({
+                                  kind: "campus",
+                                  campusId: c.id,
+                                  title: `${c.name} (${c.code})`,
+                                })
+                              }
+                            >
+                              Map / locate
+                            </Button>
+                            <Button
+                              size="small"
                               onClick={() => void saveCoords(c.id)}
                             >
                               Save depot
@@ -329,6 +449,19 @@ export default function AdminCampusesPage() {
                 onChange={(e) => setCreateLng(e.target.value)}
                 fullWidth
               />
+            </Stack>
+            <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap" }}>
+              <Button
+                variant="outlined"
+                onClick={() =>
+                  openDepotPicker({
+                    kind: "create",
+                    title: "New campus depot",
+                  })
+                }
+              >
+                Map / locate depot
+              </Button>
               <Button variant="contained" onClick={() => void createCampus()}>
                 Create campus
               </Button>
@@ -364,6 +497,60 @@ export default function AdminCampusesPage() {
           ) : null}
         </SectionCard>
       </Stack>
+
+      <Dialog
+        open={depotTarget != null}
+        onClose={() => setDepotTarget(null)}
+        fullWidth
+        maxWidth="md"
+      >
+        <DialogTitle>
+          Set depot — {depotTarget?.title ?? "Campus"}
+        </DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ pt: 1 }}>
+            <Typography variant="body2" color="text.secondary">
+              Search for a place, use your current location, or click the map.
+              Then apply and save the campus.
+            </Typography>
+            {geoError ? <Alert severity="warning">{geoError}</Alert> : null}
+            <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap" }}>
+              <Button
+                variant="outlined"
+                disabled={geoBusy}
+                onClick={() => void useCurrentLocation()}
+              >
+                {geoBusy ? "Locating…" : "Use current location"}
+              </Button>
+              {pickerPoint ? (
+                <Typography variant="body2" sx={{ alignSelf: "center" }}>
+                  {pickerPoint.lat.toFixed(6)}, {pickerPoint.lng.toFixed(6)}
+                </Typography>
+              ) : (
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  sx={{ alignSelf: "center" }}
+                >
+                  No point selected yet
+                </Typography>
+              )}
+            </Stack>
+            {depotTarget ? (
+              <DepotLocationPicker
+                value={pickerPoint}
+                onChange={setPickerPoint}
+              />
+            ) : null}
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDepotTarget(null)}>Cancel</Button>
+          <Button variant="contained" onClick={applyPicker}>
+            Apply coordinates
+          </Button>
+        </DialogActions>
+      </Dialog>
     </PortalShell>
   );
 }

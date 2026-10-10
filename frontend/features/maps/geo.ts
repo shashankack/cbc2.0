@@ -3,6 +3,10 @@ import type { MapLatLng, RoutePathItem, StopMarkerItem } from "@/components/maps
 
 export const DEFAULT_MAP_CENTER: MapLatLng = { lat: 12.9716, lng: 77.5946 };
 
+export function roundCoord(n: number): number {
+  return Math.round(n * 1e6) / 1e6;
+}
+
 export function centerFromPoints(points: MapLatLng[]): MapLatLng {
   if (!points.length) return DEFAULT_MAP_CENTER;
   const lat =
@@ -21,7 +25,8 @@ export function stopsToMarkers(
   stops: { stop_id: string; sequence: number; name: string; lat: number; lng: number }[],
 ): StopMarkerItem[] {
   return stops.map((s) => ({
-    id: s.stop_id,
+    // Sequence in id: campus depot can appear twice (start + end) with the same stop_id.
+    id: `${s.stop_id}-${s.sequence}`,
     sequence: s.sequence,
     label: s.name,
     lat: s.lat,

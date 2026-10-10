@@ -2,6 +2,7 @@
 export {
   DEFAULT_MAP_CENTER,
   centerFromPoints,
+  roundCoord,
   routeColor,
   routesToPolylines,
   stopsToMarkers,
