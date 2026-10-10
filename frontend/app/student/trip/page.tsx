@@ -1,27 +1,29 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import Alert from "@mui/material/Alert";
 import Button from "@mui/material/Button";
+import CircularProgress from "@mui/material/CircularProgress";
 import Stack from "@mui/material/Stack";
 import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
-import {
-  LiveBusMarker,
-  MapCanvas,
-  MapLegend,
-  RoutePolyline,
-  StopMarkers,
-} from "@/components/maps";
-import { centerFromPoints, stopsToMarkers } from "@/features/maps";
 import PortalShell from "@/features/shell/PortalShell";
 import { EmptyState, PageHeader, SectionCard, StatusChip } from "@/features/ui";
 import { apiGet, ApiError } from "@/lib/api";
 import { primaryCollegeId, resolveHomePath, useAuth } from "@/lib/auth";
 import { hasRole } from "@/lib/roles";
-import { brand } from "@/theme/tokens";
 import type { TripLocation } from "@/types/api";
+
+const LiveTripMap = dynamic(() => import("@/features/maps/LiveTripMap"), {
+  ssr: false,
+  loading: () => (
+    <Stack sx={{ height: 420, alignItems: "center", justifyContent: "center" }}>
+      <CircularProgress size={28} aria-label="Loading map" />
+    </Stack>
+  ),
+});
 
 const NAV = [
   { href: "/student", label: "Assignment" },
@@ -117,25 +119,21 @@ export default function StudentTripPage() {
 
   if (loading || !user) return null;
 
-  const stopPoints = itinerary.map((s) => ({ lat: s.lat, lng: s.lng }));
   const busPoint =
     location?.lat != null && location.lng != null
-      ? { lat: location.lat, lng: location.lng }
+      ? {
+          lat: location.lat,
+          lng: location.lng,
+          recordedAt: location.recorded_at,
+        }
       : null;
-  const center = centerFromPoints(
-    busPoint ? [...stopPoints, busPoint] : stopPoints,
-  );
 
   return (
     <PortalShell title="Student" description="Live bus position" nav={NAV}>
       <PageHeader
         title="Live bus map"
         description="Enter the active trip ID from your driver. Position updates while the session is active."
-        actions={
-          location ? (
-            <StatusChip status={location.status} />
-          ) : null
-        }
+        actions={location ? <StatusChip status={location.status} /> : null}
       />
       {error ? (
         <Alert severity="error" sx={{ mb: 2 }}>
@@ -182,55 +180,11 @@ export default function StudentTripPage() {
                 No stop or bus coordinates yet.
               </Typography>
             ) : (
-              <MapCanvas
-                center={center}
-                zoom={13}
-                height={420}
-                legend={
-                  <MapLegend
-                    items={[
-                      {
-                        id: "stops",
-                        color: brand.royal,
-                        label: "Ordered stops",
-                      },
-                      {
-                        id: "bus",
-                        color: "#C45C26",
-                        label: "Live bus (driver)",
-                      },
-                    ]}
-                  />
-                }
-              >
-                <StopMarkers
-                  stops={stopsToMarkers(itinerary)}
-                  color={brand.royal}
-                />
-                <RoutePolyline
-                  routes={[
-                    {
-                      id: activeTripId ?? "route",
-                      label: "Itinerary",
-                      color: brand.teal,
-                      positions: [...itinerary]
-                        .sort((a, b) => a.sequence - b.sequence)
-                        .map((s) => ({ lat: s.lat, lng: s.lng })),
-                    },
-                  ]}
-                />
-                <LiveBusMarker
-                  position={
-                    busPoint
-                      ? {
-                          ...busPoint,
-                          recordedAt: location?.recorded_at ?? undefined,
-                          label: "Your bus",
-                        }
-                      : null
-                  }
-                />
-              </MapCanvas>
+              <LiveTripMap
+                tripId={activeTripId ?? "route"}
+                stops={itinerary}
+                bus={busPoint}
+              />
             )}
           </SectionCard>
         )}

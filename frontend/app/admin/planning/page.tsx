@@ -1,31 +1,34 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import Alert from "@mui/material/Alert";
 import Button from "@mui/material/Button";
+import CircularProgress from "@mui/material/CircularProgress";
 import Stack from "@mui/material/Stack";
 import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
-import {
-  CentroidMarkers,
-  MapCanvas,
-  MapLegend,
-  RoutePolyline,
-  StopMarkers,
-} from "@/components/maps";
 import { PlanConfirmBar } from "@/components/planning";
 import PortalShell from "@/features/shell/PortalShell";
-import {
-  centerFromPoints,
-  DEFAULT_MAP_CENTER,
-  routesToPolylines,
-} from "@/features/maps";
+import { centerFromPoints, routesToPolylines } from "@/features/maps";
 import { PageHeader, SectionCard, StatusChip } from "@/features/ui";
 import { apiGet, apiPost, ApiError } from "@/lib/api";
 import { primaryCollegeId, resolveHomePath, useAuth } from "@/lib/auth";
 import { hasRole } from "@/lib/roles";
 import type { Campus, PlanningRun } from "@/types/api";
+
+const PlanningProposalMap = dynamic(
+  () => import("@/features/maps/PlanningProposalMap"),
+  {
+    ssr: false,
+    loading: () => (
+      <Stack sx={{ height: 420, alignItems: "center", justifyContent: "center" }}>
+        <CircularProgress size={28} aria-label="Loading map" />
+      </Stack>
+    ),
+  },
+);
 
 const nav = [
   { href: "/admin", label: "Campuses" },
@@ -188,29 +191,12 @@ export default function AdminPlanningPage() {
               Run {run.id} · routes {run.routes.length} · items {run.items.length}
               {typeof review === "number" ? ` · review ${review}` : ""}
             </Typography>
-            <MapCanvas
-              center={mapLayers?.center ?? DEFAULT_MAP_CENTER}
-              zoom={12}
-              height={420}
-              emptyMessage="No stop coordinates in this proposal yet."
-              legend={
-                <MapLegend
-                  items={[
-                    { id: "centroids", color: "#C45C26", label: "Proposed stops" },
-                    { id: "stops", color: "#0B3D91", label: "Route order" },
-                    { id: "routes", color: "#1B4FBF", label: "Route path" },
-                  ]}
-                />
-              }
-            >
-              {mapLayers ? (
-                <>
-                  <CentroidMarkers centroids={mapLayers.centroids} />
-                  <RoutePolyline routes={mapLayers.polylines} />
-                  <StopMarkers stops={mapLayers.stopMarkers} />
-                </>
-              ) : null}
-            </MapCanvas>
+            <PlanningProposalMap
+              center={mapLayers?.center ?? null}
+              centroids={mapLayers?.centroids ?? []}
+              polylines={mapLayers?.polylines ?? []}
+              stopMarkers={mapLayers?.stopMarkers ?? []}
+            />
             {run.status === "proposed" ? (
               <Stack sx={{ mt: 2 }}>
                 <PlanConfirmBar
