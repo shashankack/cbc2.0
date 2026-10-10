@@ -2,32 +2,26 @@
 
 ```text
 Next.js + TypeScript + MUI
-  ├── Student portal
-  ├── College admin portal
+  ├── Student portal (assignment, live bus map, scan QR)
+  ├── College admin portal (Excel import, clusters, routes, confirm)
   ├── Platform operator portal
-  └── Driver portal
+  └── Driver portal (ordered stops + trip session + QR + GPS pings + manifest)
            |
-           | HTTPS REST /api/v1
+           | HTTPS REST /api/v1 (poll or short-lived stream for location)
            v
 FastAPI
-  ├── Authentication and authorization
-  ├── College/domain onboarding
-  ├── Campus, bus, route and stop management
-  ├── Preferences and stop matching
-  ├── Rule-based allocation
-  ├── Allocation review/confirmation
-  ├── Reassignment proposals
-  ├── Trips and QR boarding
-  ├── Audit logging
-  └── Optional demand-prediction client
+  ├── Auth / tenancy / domains
+  ├── Student import + clustering + route proposals
+  ├── Rule-based bus assignment + admin confirm
+  ├── Disruption reassignment proposals
+  ├── Trips, QR tokens, boarding/attendance
+  ├── Driver location pings (active trip only) → student map read API
+  └── Audit + simple attendance analytics
            |
-           +--> PostgreSQL (+ PostGIS if available)
-           +--> ml-service (optional; graceful fallback)
+           v
+PostgreSQL (+ optional OSRM sidecar for road times)
 ```
 
-## Ownership boundaries
+**Live tracking:** driver phone → backend while trip `active`; students read latest position. No student GPS. No heavy ML.
 
-- Database records and backend business logic are authoritative.
-- Frontend validation is for usability only.
-- Do not duplicate allocation, authorization, capacity, tenant, or QR rules in the frontend.
-- ML must use an explicitly defined input/output contract and must never allocate seats.
+See [ROUTING_AND_CLUSTERING.md](./ROUTING_AND_CLUSTERING.md).

@@ -7,8 +7,5 @@ frontend/components/ @shashankack
 # Note: Replace the UI teammate GitHub handle below when known, e.g.:
 # frontend/components/ @ui-teammate-handle
 
-# ML zone
-ml-service/ @shashankack
-
 # Default — project owner
 * @shashankack

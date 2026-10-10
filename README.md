@@ -1,40 +1,49 @@
 # College Bus Route & Seat Allocation System
 
-Multi-college bus management and seat allocation platform: routes, preferences, capacity-aware proposals, disruption reassignment, and QR boarding.
+Admin Excel import → cluster stops/routes → rule-based buses → locked pickups → driver itinerary, QR attendance, live bus map, distress reallocation.
 
 ## Stack
 
 - Frontend: Next.js, TypeScript, Material UI, Leaflet
 - Backend: FastAPI, SQLAlchemy, Alembic, PostgreSQL
-- Optional: separate ML demand-prediction service
+- **No ML.** Maps: OSM (+ optional OSRM). Planning: distance + approx time (no traffic).
 
-## Documentation
+## Docs
 
-- Scope: [docs/requirements/PROJECT_REQUIREMENTS.md](docs/requirements/PROJECT_REQUIREMENTS.md)
-- Agent rules: [AGENTS.md](AGENTS.md)
+- Features: [docs/requirements/FEATURES.md](docs/requirements/FEATURES.md)
+- Requirements: [docs/requirements/PROJECT_REQUIREMENTS.md](docs/requirements/PROJECT_REQUIREMENTS.md)
+- UI pages/components: [docs/ui-ux/FRONTEND_PAGES_AND_COMPONENTS.md](docs/ui-ux/FRONTEND_PAGES_AND_COMPONENTS.md)
+- Ownership: [docs/development/TEAM_OWNERSHIP.md](docs/development/TEAM_OWNERSHIP.md)
+- Teammate prompts: [docs/development/TEAMMATE_PROMPTS.md](docs/development/TEAMMATE_PROMPTS.md)
 - Setup: [docs/development/SETUP_GUIDE.md](docs/development/SETUP_GUIDE.md)
-- Branching: [docs/development/BRANCHING_AND_RELEASES.md](docs/development/BRANCHING_AND_RELEASES.md)
 
-## Repository layout
+## Layout
 
 ```text
-frontend/      Next.js + MUI app
-backend/       FastAPI core API
-ml-service/    Optional demand prediction
-docs/          Requirements, architecture, API, setup
-scripts/       Utility scripts
+frontend/   Next.js + MUI (UI teammate owns frontend/components only)
+backend/    FastAPI core API
+docs/       Requirements, architecture, API, setup
+scripts/    Utility scripts
 ```
 
 ## Quick start
 
-See [SETUP_GUIDE.md](docs/development/SETUP_GUIDE.md). This repo is built stage-by-stage for a hackathon prototype.
+```powershell
+# Frontend
+cd frontend
+npm install
+npm run dev
+
+# Backend
+cd backend
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+uvicorn app.main:app --reload --port 8000
+```
 
 ## Branches
 
 - `main` — integration (PR only)
-- `production` — reserved for a future deploy/release branch
-- `feat/ml-demand-forecast` — ML
-- `feat/ui-design-system` — MUI components only (`frontend/components/`)
-- `feat/demo-qa-docs` — demo data, tests, docs
-
-Ownership & teammate prompts: [docs/development/TEAM_OWNERSHIP.md](docs/development/TEAM_OWNERSHIP.md) · [docs/development/TEAMMATE_PROMPTS.md](docs/development/TEAMMATE_PROMPTS.md)
+- `feat/ui-design-system` — components only
+- `feat/demo-qa-docs` — demo/docs/QA
