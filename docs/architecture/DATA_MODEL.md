@@ -16,6 +16,9 @@ Use UUIDs. Tenant-owned tables carry `college_id` where appropriate.
 | `campuses` | Campus under a college | `id`, `college_id`, `name`, `code`, unique `(college_id, code)` |
 | `campus_settings` | Per-campus planning knobs | `id`, `college_id`, `campus_id` (unique with college), `max_walk_to_stop_m`, `cluster_eps_m`, `cluster_min_samples`, `min_students_per_route` |
 | `otp_challenges` | Email OTP | `id`, `email`, `code_hash`, `expires_at`, `attempts`, `consumed_at` |
+| `auth_sessions` | HTTP-only cookie sessions | `id`, `user_id`, `token_hash` (unique), `expires_at`, `revoked_at` |
+
+Partial unique index: active `college_domains.domain` (`status = 'active'`).
 
 Cross-college FKs must not allow a campus/domain/membership to reference another college’s rows (enforce `college_id` consistency in app + DB checks where practical).
 

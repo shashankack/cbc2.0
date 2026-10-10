@@ -16,7 +16,7 @@
 Default local DB URL (matches Docker Compose):
 
 ```env
-DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:5432/college_bus
+DATABASE_URL=postgresql+pg8000://postgres:postgres@localhost:5432/college_bus
 ```
 
 ## Database (Docker)
@@ -47,8 +47,11 @@ python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 copy .env.example .env
+alembic upgrade head
 uvicorn app.main:app --reload --port 8000
 ```
+
+Bootstrap operator: set `BOOTSTRAP_OPERATOR_EMAIL` in `backend/.env`, then request/verify OTP for that email. In development, OTP codes are printed in the API process log.
 
 - Health: http://localhost:8000/api/v1/health
 - Ready: http://localhost:8000/api/v1/ready

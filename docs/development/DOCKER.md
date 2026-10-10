@@ -32,10 +32,10 @@ docker compose down -v       # ALSO deletes DB data volume — careful
 | Password | `postgres` |
 | Database | `college_bus` |
 
-`backend/.env`:
+`backend/.env` (use `pg8000` on Windows if App Control blocks `psycopg` DLLs):
 
 ```env
-DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:5432/college_bus
+DATABASE_URL=postgresql+pg8000://postgres:postgres@localhost:5432/college_bus
 ```
 
 ## Verify

@@ -11,6 +11,9 @@ dependencies = [
   "sqlalchemy",
   "alembic",
   "psycopg[binary]",
+  "pg8000",
+  "email-validator",
+  "dnspython",
   "httpx",
   "python-dotenv",
 ]
