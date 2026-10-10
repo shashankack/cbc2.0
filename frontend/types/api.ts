@@ -59,6 +59,8 @@ export type Campus = {
   college_id: string;
   name: string;
   code: string;
+  lat: number | null;
+  lng: number | null;
   created_at: string;
   settings: CampusSettings | null;
 };

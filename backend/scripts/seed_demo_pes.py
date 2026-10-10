@@ -193,16 +193,23 @@ def _ensure_campus(db, college: College) -> Campus:
             Campus.code == CAMPUS_CODE,
         )
     )
+    # Depot near the Ring Road corridor used by the fixture CSV.
+    depot_lat, depot_lng = 12.93650, 77.60600
+
     if campus is None:
         campus = Campus(
             college_id=college.id,
             name=CAMPUS_NAME,
             code=CAMPUS_CODE,
+            lat=depot_lat,
+            lng=depot_lng,
         )
         db.add(campus)
         db.flush()
     else:
         campus.name = CAMPUS_NAME
+        campus.lat = depot_lat
+        campus.lng = depot_lng
         db.flush()
 
     settings_row = db.scalar(
@@ -319,6 +326,7 @@ def main() -> None:
     print()
     print(f"  College:  {COLLEGE_NAME}  ({college_id})")
     print(f"  Campus:   {CAMPUS_NAME} [{CAMPUS_CODE}]  ({campus_id})")
+    print("  Depot:    12.93650, 77.60600 (routes start/end here)")
     print(f"  Domain:   {DOMAIN} (active)")
     print(f"  Admin:    {ADMIN_EMAIL}")
     print(f"  Drivers:  {', '.join(e for e, _ in DRIVER_EMAILS)}")

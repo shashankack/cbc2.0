@@ -49,7 +49,8 @@
 | POST | `/operator/college-applications/{id}/reject` | operator |
 | POST | `/colleges/{college_id}/domains` | college_admin |
 | POST | `/operator/domains/{id}/approve` | operator |
-| GET/POST | `/colleges/{college_id}/campuses` | college_admin |
+| GET/POST | `/colleges/{college_id}/campuses` | college_admin | Create accepts optional `lat`/`lng` (depot). Required before planning. |
+| PATCH | `/colleges/{college_id}/campuses/{campus_id}` | college_admin | Update name and/or depot `lat`/`lng` |
 | PUT | `/colleges/{college_id}/campuses/{campus_id}/settings` | college_admin |
 
 ### Fleet / import / planning

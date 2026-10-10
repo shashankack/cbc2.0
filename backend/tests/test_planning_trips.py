@@ -81,7 +81,12 @@ def test_fleet_import_plan_trip(client: TestClient) -> None:
     _login(client, admin_email)
     campus = client.post(
         f"/api/v1/colleges/{college_id}/campuses",
-        json={"name": "Main", "code": "MAIN"},
+        json={
+            "name": "Main",
+            "code": "MAIN",
+            "lat": 12.9716,
+            "lng": 77.5946,
+        },
     )
     assert campus.status_code == 201, campus.text
     campus_id = campus.json()["id"]

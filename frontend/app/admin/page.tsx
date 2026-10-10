@@ -21,7 +21,7 @@ import {
   SectionCard,
   StatusChip,
 } from "@/features/ui";
-import { apiGet, apiPost, apiPut, ApiError } from "@/lib/api";
+import { apiGet, apiPatch, apiPost, apiPut, ApiError } from "@/lib/api";
 import { primaryCollegeId, resolveHomePath, useAuth } from "@/lib/auth";
 import { hasRole } from "@/lib/roles";
 import type { Campus } from "@/types/api";
@@ -35,12 +35,17 @@ export default function AdminCampusesPage() {
   const [error, setError] = useState<string | null>(null);
   const [name, setName] = useState("Main");
   const [code, setCode] = useState("MAIN");
+  const [createLat, setCreateLat] = useState("");
+  const [createLng, setCreateLng] = useState("");
   const [domain, setDomain] = useState("");
   const [domainToken, setDomainToken] = useState<string | null>(null);
   const [maxWalk, setMaxWalk] = useState("800");
   const [clusterEps, setClusterEps] = useState("500");
   const [minSamples, setMinSamples] = useState("2");
   const [minPerRoute, setMinPerRoute] = useState("2");
+  const [coordDrafts, setCoordDrafts] = useState<
+    Record<string, { lat: string; lng: string }>
+  >({});
 
   const collegeId = user ? primaryCollegeId(user) : null;
 
@@ -48,6 +53,14 @@ export default function AdminCampusesPage() {
     try {
       const rows = await apiGet<Campus[]>(`/colleges/${cid}/campuses`);
       setCampuses(rows);
+      const next: Record<string, { lat: string; lng: string }> = {};
+      for (const c of rows) {
+        next[c.id] = {
+          lat: c.lat != null ? String(c.lat) : "",
+          lng: c.lng != null ? String(c.lng) : "",
+        };
+      }
+      setCoordDrafts(next);
       setError(null);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Load failed.");
@@ -70,10 +83,41 @@ export default function AdminCampusesPage() {
   async function createCampus() {
     if (!collegeId) return;
     try {
-      await apiPost(`/colleges/${collegeId}/campuses`, { name, code });
+      const body: {
+        name: string;
+        code: string;
+        lat?: number;
+        lng?: number;
+      } = { name, code };
+      if (createLat.trim() && createLng.trim()) {
+        body.lat = Number(createLat);
+        body.lng = Number(createLng);
+      }
+      await apiPost(`/colleges/${collegeId}/campuses`, body);
       await load(collegeId);
+      setCreateLat("");
+      setCreateLng("");
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Create failed.");
+    }
+  }
+
+  async function saveCoords(campusId: string) {
+    if (!collegeId) return;
+    const draft = coordDrafts[campusId];
+    if (!draft?.lat.trim() || !draft?.lng.trim()) {
+      setError("Campus lat and lng are both required for the depot.");
+      return;
+    }
+    try {
+      await apiPatch(`/colleges/${collegeId}/campuses/${campusId}`, {
+        lat: Number(draft.lat),
+        lng: Number(draft.lng),
+      });
+      await load(collegeId);
+      setError(null);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Coords update failed.");
     }
   }
 
@@ -130,7 +174,7 @@ export default function AdminCampusesPage() {
     >
       <PageHeader
         title="Campuses & domain"
-        description={`College ${collegeId}`}
+        description="Set campus depot coordinates so every planned route starts and ends at campus."
       />
       {error ? (
         <Alert severity="error" sx={{ mb: 2 }}>
@@ -141,12 +185,12 @@ export default function AdminCampusesPage() {
       <Stack spacing={3}>
         <SectionCard
           title="Campuses"
-          description="Settings are required before student import and planning."
+          description="Depot lat/lng and planning settings are required before import and planning."
         >
           {campuses.length === 0 ? (
             <EmptyState
               title="No campuses yet"
-              description="Create a campus code (for example MAIN) to continue onboarding."
+              description="Create a campus code (for example MAIN) with depot coordinates."
             />
           ) : (
             <TableContainer>
@@ -155,28 +199,77 @@ export default function AdminCampusesPage() {
                   <TableRow>
                     <TableCell>Name</TableCell>
                     <TableCell>Code</TableCell>
+                    <TableCell>Depot lat</TableCell>
+                    <TableCell>Depot lng</TableCell>
                     <TableCell>Settings</TableCell>
-                    <TableCell align="right">Action</TableCell>
+                    <TableCell align="right">Actions</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {campuses.map((c) => (
-                    <TableRow key={c.id} hover>
-                      <TableCell>{c.name}</TableCell>
-                      <TableCell>{c.code}</TableCell>
-                      <TableCell>
-                        <StatusChip
-                          status={c.settings ? "active" : "pending"}
-                          label={c.settings ? "configured" : "missing"}
-                        />
-                      </TableCell>
-                      <TableCell align="right">
-                        <Button size="small" onClick={() => void saveSettings(c.id)}>
-                          {c.settings ? "Update settings" : "Save settings"}
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                  {campuses.map((c) => {
+                    const draft = coordDrafts[c.id] ?? { lat: "", lng: "" };
+                    const depotOk = c.lat != null && c.lng != null;
+                    return (
+                      <TableRow key={c.id} hover>
+                        <TableCell>{c.name}</TableCell>
+                        <TableCell>{c.code}</TableCell>
+                        <TableCell sx={{ minWidth: 120 }}>
+                          <TextField
+                            size="small"
+                            value={draft.lat}
+                            onChange={(e) =>
+                              setCoordDrafts((prev) => ({
+                                ...prev,
+                                [c.id]: { ...draft, lat: e.target.value },
+                              }))
+                            }
+                            placeholder="12.9345"
+                          />
+                        </TableCell>
+                        <TableCell sx={{ minWidth: 120 }}>
+                          <TextField
+                            size="small"
+                            value={draft.lng}
+                            onChange={(e) =>
+                              setCoordDrafts((prev) => ({
+                                ...prev,
+                                [c.id]: { ...draft, lng: e.target.value },
+                              }))
+                            }
+                            placeholder="77.6050"
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Stack spacing={0.5}>
+                            <StatusChip
+                              status={depotOk ? "available" : "pending"}
+                              label={depotOk ? "depot set" : "depot missing"}
+                            />
+                            <StatusChip
+                              status={c.settings ? "active" : "pending"}
+                              label={c.settings ? "settings ok" : "settings missing"}
+                            />
+                          </Stack>
+                        </TableCell>
+                        <TableCell align="right">
+                          <Stack spacing={0.5} sx={{ alignItems: "flex-end" }}>
+                            <Button
+                              size="small"
+                              onClick={() => void saveCoords(c.id)}
+                            >
+                              Save depot
+                            </Button>
+                            <Button
+                              size="small"
+                              onClick={() => void saveSettings(c.id)}
+                            >
+                              {c.settings ? "Update settings" : "Save settings"}
+                            </Button>
+                          </Stack>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </TableContainer>
@@ -210,6 +303,7 @@ export default function AdminCampusesPage() {
                 fullWidth
               />
             </Stack>
+            <Typography variant="subtitle2">Create campus</Typography>
             <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
               <TextField
                 label="Campus name"
@@ -221,6 +315,18 @@ export default function AdminCampusesPage() {
                 label="Code"
                 value={code}
                 onChange={(e) => setCode(e.target.value)}
+                fullWidth
+              />
+              <TextField
+                label="Depot lat"
+                value={createLat}
+                onChange={(e) => setCreateLat(e.target.value)}
+                fullWidth
+              />
+              <TextField
+                label="Depot lng"
+                value={createLng}
+                onChange={(e) => setCreateLng(e.target.value)}
                 fullWidth
               />
               <Button variant="contained" onClick={() => void createCampus()}>

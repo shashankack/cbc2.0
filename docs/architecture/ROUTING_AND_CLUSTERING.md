@@ -46,13 +46,14 @@ DBSCAN “noise” points map naturally to step 2–3.
 
 **MVP uses distance + approximate time only. No live traffic.**
 
-1. Treat campus as depot (end or start of route, policy choice).
-2. Order stops with a simple heuristic (nearest neighbour / 2-opt) minimizing estimated duration.
+1. Admin sets campus depot coordinates (`campuses.lat` / `lng`). Planning requires them.
+2. Order pickup centroids with nearest neighbour **starting from the campus depot**.
 3. **Pack** consecutive ordered stops onto each available bus while cumulative headcount ≤ capacity — one route may include many centroids (not one bus per cluster).
-4. Duration source (pick one or combine; always label as approximation):
+4. Each route’s `route_stops` sequence is **campus → pickups → campus** (same campus stop at start and end).
+5. Duration source (pick one or combine; always label as approximation):
    - **Default MVP:** Haversine distance × assumed average bus speed → approx time.
    - **Optional upgrade:** OSRM static road distance/duration (still **no traffic**).
-5. Live traffic, congestion, and time-of-day traffic multipliers: **out of MVP**.
+6. Live traffic, congestion, and time-of-day traffic multipliers: **out of MVP**.
 
 ## Bus allocation rules (examples)
 

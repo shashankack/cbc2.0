@@ -63,6 +63,13 @@ def run_planning(
     )
     if campus is None:
         raise AppError("NOT_FOUND", "Campus not found.", status_code=404)
+    if campus.lat is None or campus.lng is None:
+        raise AppError(
+            "CONFLICT",
+            "Campus coordinates are required before planning. "
+            "Set lat/lng on the campus so routes can start and end at campus.",
+            status_code=409,
+        )
     settings = _campus_settings(db, college_id, campus_id)
 
     if import_batch_id is not None:
@@ -221,12 +228,25 @@ def run_planning(
 
     db.flush()
 
-    # Assemble multi-stop routes: nearest-neighbour order of centroids, packed onto
-    # available buses by capacity (ADR 0005 / ROUTING_AND_CLUSTERING).
+    # Depot stop: every route starts and ends at campus.
+    campus_stop = Stop(
+        college_id=college_id,
+        campus_id=campus_id,
+        planning_run_id=run.id,
+        name=f"{campus.name} (campus)",
+        lat=float(campus.lat),
+        lng=float(campus.lng),
+        source=StopSource.CAMPUS,
+    )
+    db.add(campus_stop)
+    db.flush()
+
+    # Assemble multi-stop routes: NN order from campus depot, packed by capacity.
     stop_points = [
         Point(id=s.id, lat=s.lat, lng=s.lng) for s in stop_for_cluster.values()
     ]
-    ordered_stops = nearest_neighbor_order(stop_points)
+    depot = Point(id=campus_stop.id, lat=float(campus.lat), lng=float(campus.lng))
+    ordered_stops = nearest_neighbor_order(stop_points, depot=depot)
     bus_iter = list(buses)
     bus_idx = 0
     route_num = 0
@@ -337,7 +357,16 @@ def run_planning(
         )
         db.add(route)
         db.flush()
-        for seq, (packed_stop_id, packed_members) in enumerate(packed, start=1):
+        # Sequence: campus → pickups → campus
+        db.add(
+            RouteStop(
+                college_id=college_id,
+                route_id=route.id,
+                stop_id=campus_stop.id,
+                sequence=1,
+            )
+        )
+        for seq, (packed_stop_id, packed_members) in enumerate(packed, start=2):
             db.add(
                 RouteStop(
                     college_id=college_id,
@@ -347,6 +376,14 @@ def run_planning(
                 )
             )
             _bind_students(route=route, bus=bus, student_ids=packed_members)
+        db.add(
+            RouteStop(
+                college_id=college_id,
+                route_id=route.id,
+                stop_id=campus_stop.id,
+                sequence=len(packed) + 2,
+            )
+        )
 
     run.status = PlanningRunStatus.PROPOSED
     db.commit()
