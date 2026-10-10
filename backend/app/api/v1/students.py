@@ -78,7 +78,7 @@ def my_allocation(
     user: CurrentUser,
 ) -> AllocationOut | None:
     require_college_roles(db, user, college_id, {"student", "college_admin"})
-    row = trip_service.my_allocation(db, college_id, user)
-    if row is None:
+    detail = trip_service.allocation_detail(db, college_id, user)
+    if detail is None:
         return None
-    return AllocationOut.model_validate(row)
+    return AllocationOut.model_validate(detail)

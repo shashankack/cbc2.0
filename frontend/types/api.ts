@@ -114,6 +114,11 @@ export type Allocation = {
   route_id: string;
   bus_id: string;
   planning_run_id: string;
+  stop_name?: string | null;
+  stop_lat?: number | null;
+  stop_lng?: number | null;
+  route_name?: string | null;
+  bus_registration_number?: string | null;
 };
 
 export type PlanningStop = {

@@ -65,7 +65,7 @@
 | GET | `/colleges/{college_id}/planning-runs` | college_admin | List runs |
 | GET | `/colleges/{college_id}/planning-runs/{run_id}` | college_admin | Run detail |
 | POST | `/colleges/{college_id}/planning-runs/{run_id}/confirm` | college_admin | Lock allocations |
-| GET | `/colleges/{college_id}/me/allocation` | student/admin | Locked assignment |
+| GET | `/colleges/{college_id}/me/allocation` | student/admin | Locked assignment (+ stop/route/bus labels) |
 
 ### Trips / QR / location / distress
 

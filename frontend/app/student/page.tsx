@@ -19,6 +19,27 @@ const NAV = [
   { href: "/student/trip", label: "Live map" },
 ];
 
+function Field({
+  label,
+  value,
+  mono = false,
+}: {
+  label: string;
+  value: string;
+  mono?: boolean;
+}) {
+  return (
+    <Stack spacing={0.5}>
+      <Typography variant="body2" color="text.secondary">
+        {label}
+      </Typography>
+      <Typography sx={mono ? { fontFamily: "monospace", fontSize: 13 } : undefined}>
+        {value}
+      </Typography>
+    </Stack>
+  );
+}
+
 export default function StudentPage() {
   const router = useRouter();
   const { user, loading } = useAuth();
@@ -78,24 +99,32 @@ export default function StudentPage() {
           title="Confirmed allocation"
           actions={<StatusChip status="locked" />}
         >
-          <Stack spacing={1.25}>
-            <Typography variant="body2" color="text.secondary">
-              Stop ID
-            </Typography>
-            <Typography sx={{ fontFamily: "monospace" }}>
-              {allocation.stop_id}
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              Route ID
-            </Typography>
-            <Typography sx={{ fontFamily: "monospace" }}>
-              {allocation.route_id}
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              Bus ID
-            </Typography>
-            <Typography sx={{ fontFamily: "monospace" }}>
-              {allocation.bus_id}
+          <Stack spacing={2}>
+            <Field
+              label="Pickup stop"
+              value={allocation.stop_name ?? allocation.stop_id}
+            />
+            {allocation.stop_lat != null && allocation.stop_lng != null ? (
+              <Field
+                label="Stop coordinates"
+                value={`${allocation.stop_lat.toFixed(5)}, ${allocation.stop_lng.toFixed(5)}`}
+                mono
+              />
+            ) : null}
+            <Field
+              label="Route"
+              value={allocation.route_name ?? allocation.route_id}
+            />
+            <Field
+              label="Bus"
+              value={
+                allocation.bus_registration_number ?? allocation.bus_id
+              }
+            />
+            <Typography variant="caption" color="text.secondary">
+              IDs — stop {allocation.stop_id.slice(0, 8)}… · route{" "}
+              {allocation.route_id.slice(0, 8)}… · bus{" "}
+              {allocation.bus_id.slice(0, 8)}…
             </Typography>
           </Stack>
         </SectionCard>

@@ -67,3 +67,8 @@ class AllocationOut(ORMModel):
     route_id: UUID
     bus_id: UUID
     planning_run_id: UUID
+    stop_name: str | None = None
+    stop_lat: float | None = None
+    stop_lng: float | None = None
+    route_name: str | None = None
+    bus_registration_number: str | None = None

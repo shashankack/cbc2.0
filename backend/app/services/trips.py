@@ -494,3 +494,30 @@ def my_allocation(db: Session, college_id: uuid.UUID, actor: User) -> Allocation
             Allocation.student_id == student.id,
         )
     )
+
+
+def allocation_detail(
+    db: Session, college_id: uuid.UUID, actor: User
+) -> dict | None:
+    """Allocation plus stop/route/bus labels for student portal display."""
+    from app.models.planning import Stop
+
+    row = my_allocation(db, college_id, actor)
+    if row is None:
+        return None
+    stop = db.get(Stop, row.stop_id)
+    route = db.get(Route, row.route_id)
+    bus = db.get(Bus, row.bus_id)
+    return {
+        "id": row.id,
+        "student_id": row.student_id,
+        "stop_id": row.stop_id,
+        "route_id": row.route_id,
+        "bus_id": row.bus_id,
+        "planning_run_id": row.planning_run_id,
+        "stop_name": stop.name if stop else None,
+        "stop_lat": stop.lat if stop else None,
+        "stop_lng": stop.lng if stop else None,
+        "route_name": route.name if route else None,
+        "bus_registration_number": bus.registration_number if bus else None,
+    }
