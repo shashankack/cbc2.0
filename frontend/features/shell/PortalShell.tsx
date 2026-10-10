@@ -45,7 +45,7 @@ export default function PortalShell({
   const theme = useTheme();
   const pathname = usePathname();
   const { user, logout } = useAuth();
-  const isMobile = useMediaQuery(theme.breakpoints.down("md"));
+  const isMobile = useMediaQuery(theme.breakpoints.down("md"), { noSsr: true });
   const [mobileOpen, setMobileOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
 

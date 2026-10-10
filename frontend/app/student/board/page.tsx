@@ -10,7 +10,7 @@ import Typography from "@mui/material/Typography";
 import { BoardingScanPanel } from "@/components/trips";
 import PortalShell from "@/features/shell/PortalShell";
 import { apiPost, ApiError } from "@/lib/api";
-import { primaryCollegeId, useAuth } from "@/lib/auth";
+import { primaryCollegeId, resolveHomePath, useAuth } from "@/lib/auth";
 import { hasRole } from "@/lib/roles";
 
 export default function StudentBoardPage() {
@@ -31,7 +31,7 @@ export default function StudentBoardPage() {
       return;
     }
     if (!hasRole(user, "student") && !user.is_platform_operator) {
-      router.replace("/app");
+      router.replace(resolveHomePath(user));
     }
   }, [loading, user, router]);
 

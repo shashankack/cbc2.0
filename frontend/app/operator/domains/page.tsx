@@ -9,7 +9,7 @@ import Button from "@mui/material/Button";
 import Typography from "@mui/material/Typography";
 import PortalShell from "@/features/shell/PortalShell";
 import { apiPost, ApiError } from "@/lib/api";
-import { useAuth } from "@/lib/auth";
+import { resolveHomePath, useAuth } from "@/lib/auth";
 
 export default function OperatorDomainsPage() {
   const router = useRouter();
@@ -25,7 +25,7 @@ export default function OperatorDomainsPage() {
       return;
     }
     if (!user.is_platform_operator) {
-      router.replace("/app");
+      router.replace(resolveHomePath(user));
     }
   }, [loading, user, router]);
 

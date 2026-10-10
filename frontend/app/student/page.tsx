@@ -7,7 +7,7 @@ import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
 import PortalShell from "@/features/shell/PortalShell";
 import { apiGet, ApiError } from "@/lib/api";
-import { primaryCollegeId, useAuth } from "@/lib/auth";
+import { primaryCollegeId, resolveHomePath, useAuth } from "@/lib/auth";
 import { hasRole } from "@/lib/roles";
 import type { Allocation } from "@/types/api";
 
@@ -25,7 +25,7 @@ export default function StudentPage() {
       return;
     }
     if (!hasRole(user, "student") && !user.is_platform_operator) {
-      router.replace("/app");
+      router.replace(resolveHomePath(user));
       return;
     }
     if (!collegeId) return;

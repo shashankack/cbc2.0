@@ -9,7 +9,7 @@ import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 import PortalShell from "@/features/shell/PortalShell";
 import { apiGet, apiPost, ApiError } from "@/lib/api";
-import { primaryCollegeId, useAuth } from "@/lib/auth";
+import { primaryCollegeId, resolveHomePath, useAuth } from "@/lib/auth";
 import { hasRole } from "@/lib/roles";
 import type { Bus, Campus } from "@/types/api";
 
@@ -49,7 +49,7 @@ export default function AdminBusesPage() {
       return;
     }
     if (!hasRole(user, "college_admin") && !user.is_platform_operator) {
-      router.replace("/app");
+      router.replace(resolveHomePath(user));
       return;
     }
     if (collegeId) {
@@ -75,7 +75,14 @@ export default function AdminBusesPage() {
     }
   }
 
-  if (loading || !user || !collegeId) return null;
+  if (loading || !user) return null;
+  if (!collegeId) {
+    return (
+      <PortalShell title="College admin" nav={nav}>
+        <Alert severity="warning">No college membership on this account.</Alert>
+      </PortalShell>
+    );
+  }
 
   return (
     <PortalShell title="College admin" nav={nav}>

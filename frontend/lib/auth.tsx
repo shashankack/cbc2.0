@@ -106,7 +106,8 @@ export function resolveHomePath(user: MeResponse): string {
   if (roles.has("student")) {
     return "/student";
   }
-  return "/app";
+  // Never return "/app" — that page redirects again and would loop forever.
+  return "/";
 }
 
 export function primaryCollegeId(user: MeResponse): string | null {

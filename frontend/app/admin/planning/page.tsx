@@ -10,7 +10,7 @@ import Typography from "@mui/material/Typography";
 import { PlanConfirmBar } from "@/components/planning";
 import PortalShell from "@/features/shell/PortalShell";
 import { apiGet, apiPost, ApiError } from "@/lib/api";
-import { primaryCollegeId, useAuth } from "@/lib/auth";
+import { primaryCollegeId, resolveHomePath, useAuth } from "@/lib/auth";
 import { hasRole } from "@/lib/roles";
 import type { Campus } from "@/types/api";
 
@@ -47,7 +47,7 @@ export default function AdminPlanningPage() {
       return;
     }
     if (!hasRole(user, "college_admin") && !user.is_platform_operator) {
-      router.replace("/app");
+      router.replace(resolveHomePath(user));
       return;
     }
     if (!collegeId) return;
@@ -88,7 +88,14 @@ export default function AdminPlanningPage() {
     }
   }
 
-  if (loading || !user || !collegeId) return null;
+  if (loading || !user) return null;
+  if (!collegeId) {
+    return (
+      <PortalShell title="College admin" nav={nav}>
+        <Alert severity="warning">No college membership on this account.</Alert>
+      </PortalShell>
+    );
+  }
 
   const proposed = run?.items.filter((i) =>
     ["proposed", "snapped"].includes(i.status),

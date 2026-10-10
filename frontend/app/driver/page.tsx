@@ -15,7 +15,7 @@ import {
 } from "@/components/trips";
 import PortalShell from "@/features/shell/PortalShell";
 import { apiPost, ApiError } from "@/lib/api";
-import { primaryCollegeId, useAuth } from "@/lib/auth";
+import { primaryCollegeId, resolveHomePath, useAuth } from "@/lib/auth";
 import { hasRole } from "@/lib/roles";
 import type { Trip } from "@/types/api";
 
@@ -48,7 +48,7 @@ export default function DriverPage() {
       return;
     }
     if (!hasRole(user, "driver") && !user.is_platform_operator) {
-      router.replace("/app");
+      router.replace(resolveHomePath(user));
     }
   }, [loading, user, router]);
 

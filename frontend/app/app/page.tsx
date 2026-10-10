@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import CircularProgress from "@mui/material/CircularProgress";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
@@ -9,16 +9,22 @@ import { resolveHomePath, useAuth } from "@/lib/auth";
 
 export default function AppRedirectPage() {
   const router = useRouter();
+  const pathname = usePathname();
   const { user, loading } = useAuth();
 
   useEffect(() => {
     if (loading) return;
     if (!user) {
-      router.replace("/login");
+      if (pathname !== "/login") {
+        router.replace("/login");
+      }
       return;
     }
-    router.replace(resolveHomePath(user));
-  }, [loading, user, router]);
+    const dest = resolveHomePath(user);
+    if (dest !== pathname) {
+      router.replace(dest);
+    }
+  }, [loading, user, router, pathname]);
 
   return (
     <Stack

@@ -3,6 +3,8 @@ import type { ApiErrorBody } from "@/types/api";
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000/api/v1";
 
+const DEFAULT_TIMEOUT_MS = 12_000;
+
 export function getApiBaseUrl(): string {
   return API_BASE_URL;
 }
@@ -40,6 +42,7 @@ type RequestOptions = {
   method?: string;
   body?: unknown;
   formData?: FormData;
+  timeoutMs?: number;
 };
 
 export async function apiRequest<T>(
@@ -57,23 +60,40 @@ export async function apiRequest<T>(
     body = JSON.stringify(options.body);
   }
 
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    method: options.method ?? "GET",
-    headers,
-    body,
-    credentials: "include",
-    cache: "no-store",
-  });
+  const controller = new AbortController();
+  const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  const timeout =
+    typeof window !== "undefined"
+      ? window.setTimeout(() => controller.abort(), timeoutMs)
+      : setTimeout(() => controller.abort(), timeoutMs);
 
-  if (!response.ok) {
-    throw await parseError(response);
+  try {
+    const response = await fetch(`${API_BASE_URL}${path}`, {
+      method: options.method ?? "GET",
+      headers,
+      body,
+      credentials: "include",
+      cache: "no-store",
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      throw await parseError(response);
+    }
+
+    if (response.status === 204) {
+      return undefined as T;
+    }
+
+    return response.json() as Promise<T>;
+  } catch (err) {
+    if (err instanceof Error && err.name === "AbortError") {
+      throw new ApiError(0, "TIMEOUT", "Request timed out. Is the API running?");
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeout);
   }
-
-  if (response.status === 204) {
-    return undefined as T;
-  }
-
-  return response.json() as Promise<T>;
 }
 
 export async function apiGet<T>(path: string): Promise<T> {

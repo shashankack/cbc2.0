@@ -14,7 +14,7 @@ import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 import PortalShell from "@/features/shell/PortalShell";
 import { apiGet, apiPost, ApiError } from "@/lib/api";
-import { useAuth } from "@/lib/auth";
+import { resolveHomePath, useAuth } from "@/lib/auth";
 import type { CollegeApplication } from "@/types/api";
 
 export default function OperatorPage() {
@@ -48,7 +48,7 @@ export default function OperatorPage() {
       return;
     }
     if (!user.is_platform_operator) {
-      router.replace("/app");
+      router.replace(resolveHomePath(user));
       return;
     }
     void load();

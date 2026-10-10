@@ -9,7 +9,7 @@ import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 import PortalShell from "@/features/shell/PortalShell";
 import { apiGet, apiPost, apiPut, ApiError } from "@/lib/api";
-import { primaryCollegeId, useAuth } from "@/lib/auth";
+import { primaryCollegeId, resolveHomePath, useAuth } from "@/lib/auth";
 import { hasRole } from "@/lib/roles";
 import type { Campus } from "@/types/api";
 
@@ -48,7 +48,7 @@ export default function AdminCampusesPage() {
       return;
     }
     if (!hasRole(user, "college_admin") && !user.is_platform_operator) {
-      router.replace("/app");
+      router.replace(resolveHomePath(user));
       return;
     }
     if (collegeId) void load(collegeId);
@@ -92,8 +92,19 @@ export default function AdminCampusesPage() {
     }
   }
 
-  if (loading || !user || !collegeId) {
+  if (loading || !user) {
     return null;
+  }
+
+  if (!collegeId) {
+    return (
+      <PortalShell title="College admin" nav={nav}>
+        <Alert severity="warning">
+          No college membership is linked to this account yet. Approve a college
+          application with this email as admin, then sign in again.
+        </Alert>
+      </PortalShell>
+    );
   }
 
   return (
