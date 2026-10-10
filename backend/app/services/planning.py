@@ -221,16 +221,15 @@ def run_planning(
 
     db.flush()
 
-    # Build routes: each stop with enough students becomes a route (or merge small ones later)
+    # Assemble multi-stop routes: nearest-neighbour order of centroids, packed onto
+    # available buses by capacity (ADR 0005 / ROUTING_AND_CLUSTERING).
     stop_points = [
         Point(id=s.id, lat=s.lat, lng=s.lng) for s in stop_for_cluster.values()
     ]
     ordered_stops = nearest_neighbor_order(stop_points)
-
-    # Partition ordered stops into routes by min_students_per_route capacity packing
-    # Simple policy: one route per stop if headcount >= min; else leave students on review already handled
     bus_iter = list(buses)
     bus_idx = 0
+    route_num = 0
 
     def _mark_students_for_review(student_ids: list[uuid.UUID]) -> None:
         for sid in student_ids:
@@ -246,67 +245,108 @@ def run_planning(
                 item.status = PlanningItemStatus.NEEDS_ADMIN_REVIEW
                 student_by_id[sid].status = StudentStatus.NEEDS_ADMIN_REVIEW
 
-    for seq_base, sp in enumerate(ordered_stops):
-        stop_id = sp.id  # type: ignore[assignment]
-        member_ids = members_by_stop.get(stop_id, [])
-        if len(member_ids) < settings.min_students_per_route:
-            # Mark those items as needs review if too small for a route
-            _mark_students_for_review(member_ids)
+    def _bind_students(
+        *,
+        route: Route,
+        bus: Bus,
+        student_ids: list[uuid.UUID],
+    ) -> None:
+        for sid in student_ids:
+            item = db.scalar(
+                select(PlanningRunItem).where(
+                    PlanningRunItem.planning_run_id == run.id,
+                    PlanningRunItem.student_id == sid,
+                )
+            )
+            if item is None:
+                continue
+            item.route_id = route.id
+            item.bus_id = bus.id
+            if item.status != PlanningItemStatus.NEEDS_ADMIN_REVIEW:
+                item.status = (
+                    PlanningItemStatus.SNAPPED
+                    if item.status == PlanningItemStatus.SNAPPED
+                    else PlanningItemStatus.PROPOSED
+                )
+                student_by_id[sid].status = StudentStatus.ALLOCATED
+
+    stop_i = 0
+    while stop_i < len(ordered_stops):
+        stop_id = ordered_stops[stop_i].id  # type: ignore[assignment]
+        members = members_by_stop.get(stop_id, [])
+        if not members:
+            stop_i += 1
             continue
 
         if bus_idx >= len(bus_iter):
-            # Keep a partial proposal; leftover stops need admin follow-up.
-            _mark_students_for_review(member_ids)
+            leftover: list[uuid.UUID] = []
+            for sp in ordered_stops[stop_i:]:
+                leftover.extend(members_by_stop.get(sp.id, []))  # type: ignore[arg-type]
+            _mark_students_for_review(leftover)
+            break
+
+        bus = bus_iter[bus_idx]
+        bus_idx += 1
+        packed: list[tuple[uuid.UUID, list[uuid.UUID]]] = []
+        headcount = 0
+
+        while stop_i < len(ordered_stops):
+            sid = ordered_stops[stop_i].id  # type: ignore[assignment]
+            stop_members = members_by_stop.get(sid, [])
+            n = len(stop_members)
+            if n == 0:
+                stop_i += 1
+                continue
+
+            # Single stop larger than this bus: fill what fits, leave rest for next bus.
+            if not packed and n > bus.capacity:
+                chunk = stop_members[: bus.capacity]
+                rest = stop_members[bus.capacity :]
+                members_by_stop[sid] = rest
+                packed.append((sid, chunk))
+                headcount = len(chunk)
+                # Do not advance stop_i — remaining headcount stays on this stop.
+                break
+
+            if headcount + n > bus.capacity:
+                break
+
+            packed.append((sid, stop_members))
+            headcount += n
+            stop_i += 1
+
+        if not packed:
+            # Could not place current stop on any remaining bus capacity.
+            _mark_students_for_review(members)
+            stop_i += 1
             continue
 
-        # May need multiple buses if headcount > capacity
-        remaining = member_ids[:]
-        route_num = 1
-        while remaining:
-            if bus_idx >= len(bus_iter):
-                _mark_students_for_review(remaining)
-                break
-            bus = bus_iter[bus_idx]
-            bus_idx += 1
-            chunk = remaining[: bus.capacity]
-            remaining = remaining[bus.capacity :]
-
-            route = Route(
-                college_id=college_id,
-                campus_id=campus_id,
-                planning_run_id=run.id,
-                name=f"Route {seq_base + 1}-{route_num}",
-                status=RouteStatus.DRAFT,
+        if headcount < settings.min_students_per_route:
+            _mark_students_for_review(
+                [sid for _, m in packed for sid in m]
             )
-            db.add(route)
-            db.flush()
+            continue
+
+        route_num += 1
+        route = Route(
+            college_id=college_id,
+            campus_id=campus_id,
+            planning_run_id=run.id,
+            name=f"Route {route_num}",
+            status=RouteStatus.DRAFT,
+        )
+        db.add(route)
+        db.flush()
+        for seq, (packed_stop_id, packed_members) in enumerate(packed, start=1):
             db.add(
                 RouteStop(
                     college_id=college_id,
                     route_id=route.id,
-                    stop_id=stop_id,
-                    sequence=1,
+                    stop_id=packed_stop_id,
+                    sequence=seq,
                 )
             )
-            for sid in chunk:
-                item = db.scalar(
-                    select(PlanningRunItem).where(
-                        PlanningRunItem.planning_run_id == run.id,
-                        PlanningRunItem.student_id == sid,
-                    )
-                )
-                if item is None:
-                    continue
-                item.route_id = route.id
-                item.bus_id = bus.id
-                if item.status != PlanningItemStatus.NEEDS_ADMIN_REVIEW:
-                    item.status = (
-                        PlanningItemStatus.SNAPPED
-                        if item.status == PlanningItemStatus.SNAPPED
-                        else PlanningItemStatus.PROPOSED
-                    )
-                    student_by_id[sid].status = StudentStatus.ALLOCATED
-            route_num += 1
+            _bind_students(route=route, bus=bus, student_ids=packed_members)
 
     run.status = PlanningRunStatus.PROPOSED
     db.commit()

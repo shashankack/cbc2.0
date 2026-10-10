@@ -48,16 +48,18 @@ DBSCAN “noise” points map naturally to step 2–3.
 
 1. Treat campus as depot (end or start of route, policy choice).
 2. Order stops with a simple heuristic (nearest neighbour / 2-opt) minimizing estimated duration.
-3. Duration source (pick one or combine; always label as approximation):
+3. **Pack** consecutive ordered stops onto each available bus while cumulative headcount ≤ capacity — one route may include many centroids (not one bus per cluster).
+4. Duration source (pick one or combine; always label as approximation):
    - **Default MVP:** Haversine distance × assumed average bus speed → approx time.
    - **Optional upgrade:** OSRM static road distance/duration (still **no traffic**).
-4. Live traffic, congestion, and time-of-day traffic multipliers: **out of MVP**.
+5. Live traffic, congestion, and time-of-day traffic multipliers: **out of MVP**.
 
 ## Bus allocation rules (examples)
 
-- Let `n` = confirmed students on route, `c` = bus capacity.
-- Need `ceil(n / c)` buses, or pick the smallest available bus with `c >= n` if one bus policy.
-- If `n < min_students_per_route` after merges → flag for admin (merge routes or keep review).
+- Let `n` = confirmed students on a packed route, `c` = bus capacity.
+- Open the next bus/route only when the next stop would exceed remaining capacity (or a single stop alone exceeds `c`).
+- If `n < min_students_per_route` after packing → flag those students for admin review (do not open a solo micro-route).
+- Leftover stops when buses are exhausted → `needs_admin_review` (partial proposal kept).
 - Mark bus unavailable → reassignment proposal (existing disruption rules).
 
 ## Distress / emergency reallocation (runtime)
