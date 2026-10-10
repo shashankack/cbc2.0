@@ -309,9 +309,11 @@ The tree is a proposed layout, not a command to create all files at once. The co
 
 ## 7. Git branching and collaboration
 
+> **Superseded branch name:** The integration branch is now `main`. A separate `production` branch may be created later for deploy/release. See [BRANCHING_AND_RELEASES.md](../development/BRANCHING_AND_RELEASES.md) and ADR `decisions/0003-rename-integration-branch-to-main.md`.
+
 ### Branch strategy
 
-Use a protected integration branch named `production`. Create feature branches from `production`; teammates push only to their assigned branch and open pull requests back to `production`.
+Use a protected integration branch named `main`. Create feature branches from `main`; teammates push only to their assigned branch and open pull requests back to `main`.
 
 Recommended branches:
 

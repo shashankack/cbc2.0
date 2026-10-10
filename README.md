@@ -31,7 +31,8 @@ See [SETUP_GUIDE.md](docs/development/SETUP_GUIDE.md). This repo is built stage-
 
 ## Branches
 
-- `production` — integration (PR only)
+- `main` — integration (PR only)
+- `production` — reserved for a future deploy/release branch
 - `feat/ml-demand-forecast` — ML
 - `feat/ui-design-system` — MUI / UI
 - `feat/demo-qa-docs` — demo data, tests, docs

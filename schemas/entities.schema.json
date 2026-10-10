@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://college-bus.local/schemas/entities.schema.json",
+  "title": "CollegeBusCoreEntities",
+  "description": "Draft entity inventory for Stage 3. Canonical narrative: docs/architecture/DATA_MODEL.md",
+  "type": "object",
+  "properties": {
+    "entities": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "colleges",
+          "college_domains",
+          "users",
+          "college_memberships",
+          "otp_challenges",
+          "college_applications",
+          "campuses",
+          "campus_settings",
+          "buses",
+          "routes",
+          "stops",
+          "route_stops",
+          "student_preferences",
+          "allocations",
+          "allocation_runs",
+          "allocation_run_items",
+          "trips",
+          "trip_qr_tokens",
+          "boarding_records",
+          "audit_logs"
+        ]
+      }
+    },
+    "identifier_strategy": {
+      "const": "uuid"
+    },
+    "tenancy": {
+      "const": "college_id on tenant-owned tables"
+    }
+  },
+  "required": ["entities", "identifier_strategy", "tenancy"]
+}

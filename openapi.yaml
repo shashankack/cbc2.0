@@ -1,0 +1,41 @@
+openapi: 3.0.3
+info:
+  title: College Bus Route & Seat Allocation API
+  version: 0.1.0
+  description: >
+    Draft OpenAPI stub. Authoritative conventions live in docs/api/API_CONTRACT.md.
+    Endpoint inventory expands from Stage 4 onward.
+servers:
+  - url: http://localhost:8000
+    description: Local FastAPI
+paths:
+  /api/v1/health:
+    get:
+      summary: Liveness / smoke check
+      operationId: getHealth
+      responses:
+        "200":
+          description: Service is up
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status:
+                    type: string
+                    example: ok
+components:
+  schemas:
+    ApiError:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+            message:
+              type: string
