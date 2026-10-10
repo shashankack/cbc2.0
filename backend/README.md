@@ -29,7 +29,11 @@ On Windows, prefer `postgresql+pg8000://…` if App Control blocks `psycopg` DLL
 pytest -q
 ```
 
-## Implemented now
+## Implemented
 
-Tenant foundation + OTP session auth + operator college onboarding + campuses/settings.
+- Tenant onboarding + OTP sessions
+- Buses, Excel/CSV student import
+- DBSCAN clustering planning + confirm (locked allocations)
+- Trips: start/end, QR boarding, driver GPS, distress emergency plans
+
 See `docs/api/API_CONTRACT.md`.

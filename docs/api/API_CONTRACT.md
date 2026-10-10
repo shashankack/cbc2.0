@@ -6,10 +6,10 @@
 - JSON request/response payloads
 - Field names: `snake_case`
 - IDs: UUID strings
-- Timestamps: ISO 8601 with timezone (e.g. `2026-10-10T15:30:00+05:30`)
-- Status fields: explicit enums (never free-text)
-- Validation: Pydantic on backend; FastAPI OpenAPI at `/docs`
-- Auth (from OTP step onward): HTTP-only session cookie (`cbc_session`); never trust client-supplied `college_id` / role / student_id / driver_id
+- Timestamps: ISO 8601 with timezone
+- Status fields: explicit enums
+- Auth: HTTP-only session cookie (`cbc_session`)
+- Never trust client-supplied `college_id` / role / student_id / driver_id
 
 ## Error shape
 
@@ -22,55 +22,73 @@
 }
 ```
 
-Common codes (extend as needed):
-
 | Code | HTTP | Meaning |
 |------|------|---------|
-| `VALIDATION_ERROR` | 422 | Request body/query invalid |
+| `VALIDATION_ERROR` | 422 | Invalid body/query invalid |
 | `UNAUTHORIZED` | 401 | Not authenticated |
 | `FORBIDDEN` | 403 | Authenticated but not allowed |
 | `NOT_FOUND` | 404 | Resource missing or outside tenant |
 | `CONFLICT` | 409 | Uniqueness / state conflict |
 | `DATABASE_UNAVAILABLE` | 503 | DB not reachable |
 
-## Authorization rules
-
-- Never trust client-supplied `college_id`, role, student ID, driver ID, allocation status, or capacity as authorization proof.
-- Derive actor identity and role from the authenticated server-side session/token.
-- Check tenant scope on every tenant-owned read and write.
-- Do not return OTP hashes, QR token hashes, or internal credentials.
-
 ## Implemented
+
+### Health / auth / tenancy
+
+| Method | Path | Auth |
+|--------|------|------|
+| GET | `/health` | none |
+| GET | `/ready` | none |
+| POST | `/auth/otp/request` | public |
+| POST | `/auth/otp/verify` | public → sets cookie |
+| POST | `/auth/logout` | session |
+| GET | `/auth/me` | session |
+| POST | `/operator/college-applications` | public |
+| GET | `/operator/college-applications` | operator |
+| POST | `/operator/college-applications/{id}/approve` | operator |
+| POST | `/operator/college-applications/{id}/reject` | operator |
+| POST | `/colleges/{college_id}/domains` | college_admin |
+| POST | `/operator/domains/{id}/approve` | operator |
+| GET/POST | `/colleges/{college_id}/campuses` | college_admin |
+| PUT | `/colleges/{college_id}/campuses/{campus_id}/settings` | college_admin |
+
+### Fleet / import / planning
 
 | Method | Path | Auth | Purpose |
 |--------|------|------|---------|
-| GET | `/api/v1/health` | none | Liveness |
-| GET | `/api/v1/ready` | none | Readiness (`database: true/false`) |
-| POST | `/api/v1/operator/college-applications` | public | Submit college application |
-| GET | `/api/v1/operator/college-applications` | operator | List applications |
-| POST | `/api/v1/operator/college-applications/{id}/approve` | operator | Approve + appoint admin |
-| POST | `/api/v1/operator/college-applications/{id}/reject` | operator | Reject |
-| POST | `/api/v1/colleges/{college_id}/domains` | college_admin | Request domain |
-| POST | `/api/v1/operator/domains/{id}/approve` | operator | Approve domain (DNS check if enabled) |
-| GET | `/api/v1/colleges/{college_id}/campuses` | college_admin | List campuses |
-| POST | `/api/v1/colleges/{college_id}/campuses` | college_admin | Create campus |
-| PUT | `/api/v1/colleges/{college_id}/campuses/{campus_id}/settings` | college_admin | Walking/cluster settings |
-| POST | `/api/v1/auth/otp/request` | public | Request email OTP |
-| POST | `/api/v1/auth/otp/verify` | public | Verify OTP → session cookie |
-| POST | `/api/v1/auth/logout` | session | Clear session |
-| GET | `/api/v1/auth/me` | session | Current user + memberships |
+| GET/POST | `/colleges/{college_id}/buses` | college_admin | List / create buses |
+| PATCH | `/colleges/{college_id}/buses/{bus_id}` | college_admin | Status / capacity / driver |
+| POST | `/colleges/{college_id}/imports/students` | college_admin | Excel/CSV upload (`multipart`: `campus_id`, `file`) |
+| GET | `/colleges/{college_id}/imports/students/{batch_id}` | college_admin | Import batch status |
+| GET | `/colleges/{college_id}/students` | college_admin | List students |
+| POST | `/colleges/{college_id}/planning-runs` | college_admin | Cluster + route + bus proposal |
+| GET | `/colleges/{college_id}/planning-runs` | college_admin | List runs |
+| GET | `/colleges/{college_id}/planning-runs/{run_id}` | college_admin | Run detail |
+| POST | `/colleges/{college_id}/planning-runs/{run_id}/confirm` | college_admin | Lock allocations |
+| GET | `/colleges/{college_id}/me/allocation` | student/admin | Locked assignment |
 
-### Local auth notes
+### Trips / QR / location / distress
 
-- Bootstrap platform operator: set `BOOTSTRAP_OPERATOR_EMAIL` (default `operator@example.com`). First successful OTP login for that email sets `is_platform_operator`.
-- Development: OTP codes are logged to the API process (WARNING), not returned in the HTTP response.
-- `DNS_VERIFY_ENABLED=false` (default) skips live DNS TXT checks so domain approval works locally.
+| Method | Path | Auth | Purpose |
+|--------|------|------|---------|
+| POST | `/colleges/{college_id}/trips` | driver or college_admin | Create scheduled trip |
+| POST | `/colleges/{college_id}/trips/{trip_id}/start` | driver | Start session + QR + itinerary |
+| POST | `/colleges/{college_id}/trips/{trip_id}/qr/refresh` | driver | New QR token |
+| POST | `/colleges/{college_id}/trips/{trip_id}/end` | driver | End session (invalidates QR) |
+| GET | `/colleges/{college_id}/trips/{trip_id}/itinerary` | driver/admin/student | Ordered stops |
+| POST | `/colleges/{college_id}/trips/{trip_id}/location` | driver | GPS ping (active only) |
+| GET | `/colleges/{college_id}/trips/{trip_id}/location` | driver/admin/student | Last known position |
+| POST | `/colleges/{college_id}/trips/{trip_id}/board` | student | Scan QR → attendance |
+| POST | `/colleges/{college_id}/trips/{trip_id}/distress` | driver | Distress + emergency plan |
+| POST | `/colleges/{college_id}/emergency-reallocations/{id}/confirm` | college_admin | Confirm emergency plan |
 
-## Planned (later)
+### Local notes
 
-### C — Fleet / planning / trips
-
-Documented when we reach those stages: buses, Excel import, planning runs, allocations, trips, QR, location, distress.
+- Bootstrap operator: `BOOTSTRAP_OPERATOR_EMAIL` (default `operator@example.com`).
+- Dev OTP codes logged at WARNING on the API process.
+- `DNS_VERIFY_ENABLED=false` skips live DNS TXT checks.
+- Import requires active domain + campus settings.
+- Planning uses Haversine DBSCAN + nearest-neighbour route order + capacity packing (no ML / no traffic).
 
 ## Out of scope
 
@@ -81,4 +99,4 @@ Documented when we reach those stages: buses, Excel import, planning runs, alloc
 
 - Features: [../requirements/FEATURES.md](../requirements/FEATURES.md)
 - Data model: [../architecture/DATA_MODEL.md](../architecture/DATA_MODEL.md)
-- OpenAPI: run backend → `/openapi.json` (stub also at [../../openapi.yaml](../../openapi.yaml))
+- Clustering: [../architecture/ROUTING_AND_CLUSTERING.md](../architecture/ROUTING_AND_CLUSTERING.md)

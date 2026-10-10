@@ -118,12 +118,50 @@ def require_operator(user: User) -> User:
 
 
 def require_college_admin(db: Session, user: User, college_id) -> None:
+    require_college_roles(db, user, college_id, {"college_admin"})
+
+
+def require_college_roles(
+    db: Session,
+    user: User,
+    college_id,
+    roles: set[str],
+) -> CollegeMembership | None:
+    if user.is_platform_operator and "college_admin" in roles:
+        return None
     membership = db.scalar(
         select(CollegeMembership).where(
             CollegeMembership.user_id == user.id,
             CollegeMembership.college_id == college_id,
-            CollegeMembership.role == "college_admin",
+            CollegeMembership.role.in_(roles),
         )
     )
-    if membership is None and not user.is_platform_operator:
-        raise AppError("FORBIDDEN", "College admin role required.", status_code=403)
+    if membership is None:
+        raise AppError(
+            "FORBIDDEN",
+            f"Required role(s): {', '.join(sorted(roles))}.",
+            status_code=403,
+        )
+    return membership
+
+
+def ensure_membership(
+    db: Session,
+    *,
+    college_id,
+    user_id,
+    role: str,
+) -> CollegeMembership:
+    existing = db.scalar(
+        select(CollegeMembership).where(
+            CollegeMembership.college_id == college_id,
+            CollegeMembership.user_id == user_id,
+            CollegeMembership.role == role,
+        )
+    )
+    if existing is not None:
+        return existing
+    row = CollegeMembership(college_id=college_id, user_id=user_id, role=role)
+    db.add(row)
+    db.flush()
+    return row

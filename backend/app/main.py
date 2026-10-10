@@ -10,7 +10,7 @@ from app.core.errors import AppError, app_error_handler, validation_error_handle
 
 app = FastAPI(
     title="College Bus Route & Seat Allocation API",
-    version="0.3.0",
+    version="0.4.0",
     description=(
         "Excel clustering, rule-based buses, QR boarding, "
         "driver live location, distress. No ML."

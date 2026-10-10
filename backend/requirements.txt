@@ -10,6 +10,8 @@ email-validator
 dnspython
 httpx
 python-dotenv
+python-multipart
+openpyxl
 pytest
 pytest-asyncio
 
