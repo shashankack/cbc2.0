@@ -5,9 +5,21 @@ import { useRouter } from "next/navigation";
 import Alert from "@mui/material/Alert";
 import Button from "@mui/material/Button";
 import Stack from "@mui/material/Stack";
+import Table from "@mui/material/Table";
+import TableBody from "@mui/material/TableBody";
+import TableCell from "@mui/material/TableCell";
+import TableContainer from "@mui/material/TableContainer";
+import TableHead from "@mui/material/TableHead";
+import TableRow from "@mui/material/TableRow";
 import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 import PortalShell from "@/features/shell/PortalShell";
+import {
+  EmptyState,
+  PageHeader,
+  SectionCard,
+  StatusChip,
+} from "@/features/ui";
 import { apiGet, apiPost, apiPut, ApiError } from "@/lib/api";
 import { primaryCollegeId, resolveHomePath, useAuth } from "@/lib/auth";
 import { hasRole } from "@/lib/roles";
@@ -36,6 +48,7 @@ export default function AdminCampusesPage() {
     try {
       const rows = await apiGet<Campus[]>(`/colleges/${cid}/campuses`);
       setCampuses(rows);
+      setError(null);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Load failed.");
     }
@@ -87,6 +100,7 @@ export default function AdminCampusesPage() {
         { domain },
       );
       setDomainToken(`${row.id} · ${row.dns_txt_token}`);
+      setError(null);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Domain request failed.");
     }
@@ -108,59 +122,115 @@ export default function AdminCampusesPage() {
   }
 
   return (
-    <PortalShell title="College admin" nav={nav}>
+    <PortalShell
+      title="College admin"
+      description="Campuses, settings, and domains"
+      nav={nav}
+    >
+      <PageHeader
+        title="Campuses & domain"
+        description={`College ${collegeId}`}
+      />
+      {error ? (
+        <Alert severity="error" sx={{ mb: 2 }}>
+          {error}
+        </Alert>
+      ) : null}
+
       <Stack spacing={3}>
-        <Typography variant="h5" sx={{ fontWeight: 700 }}>
-          Campuses & domain
-        </Typography>
-        <Typography color="text.secondary">College ID: {collegeId}</Typography>
-        {error ? <Alert severity="error">{error}</Alert> : null}
+        <SectionCard
+          title="Campuses"
+          description="Settings are required before student import and planning."
+        >
+          {campuses.length === 0 ? (
+            <EmptyState
+              title="No campuses yet"
+              description="Create a campus code (for example MAIN) to continue onboarding."
+            />
+          ) : (
+            <TableContainer>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Name</TableCell>
+                    <TableCell>Code</TableCell>
+                    <TableCell>Settings</TableCell>
+                    <TableCell align="right">Action</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {campuses.map((c) => (
+                    <TableRow key={c.id} hover>
+                      <TableCell>{c.name}</TableCell>
+                      <TableCell>{c.code}</TableCell>
+                      <TableCell>
+                        <StatusChip
+                          status={c.settings ? "active" : "pending"}
+                          label={c.settings ? "configured" : "missing"}
+                        />
+                      </TableCell>
+                      <TableCell align="right">
+                        {!c.settings ? (
+                          <Button size="small" onClick={() => void saveSettings(c.id)}>
+                            Apply defaults
+                          </Button>
+                        ) : (
+                          "—"
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          )}
 
-        <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
-          <TextField label="Campus name" value={name} onChange={(e) => setName(e.target.value)} />
-          <TextField label="Code" value={code} onChange={(e) => setCode(e.target.value)} />
-          <Button variant="contained" onClick={() => void createCampus()}>
-            Create campus
-          </Button>
-        </Stack>
+          <Stack direction={{ xs: "column", sm: "row" }} spacing={2} sx={{ mt: 2 }}>
+            <TextField
+              label="Campus name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              fullWidth
+            />
+            <TextField
+              label="Code"
+              value={code}
+              onChange={(e) => setCode(e.target.value)}
+              fullWidth
+            />
+            <Button variant="contained" onClick={() => void createCampus()}>
+              Create
+            </Button>
+          </Stack>
+        </SectionCard>
 
-        <Stack spacing={1}>
-          {campuses.map((c) => (
-            <Stack
-              key={c.id}
-              direction="row"
-              spacing={2}
-              sx={{ alignItems: "center" }}
-            >
-              <Typography>
-                {c.name} ({c.code}) — settings{" "}
-                {c.settings ? "configured" : "missing"}
+        <SectionCard
+          title="Email domain"
+          description="Request a domain, then ask the platform operator to approve it."
+        >
+          <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
+            <TextField
+              label="Email domain"
+              placeholder="college.edu"
+              value={domain}
+              onChange={(e) => setDomain(e.target.value)}
+              fullWidth
+            />
+            <Button variant="outlined" onClick={() => void requestDomain()}>
+              Request domain
+            </Button>
+          </Stack>
+          {domainToken ? (
+            <Alert severity="info" sx={{ mt: 2 }}>
+              <Typography variant="body2">
+                Give the operator this domain id + TXT token:
               </Typography>
-              {!c.settings ? (
-                <Button size="small" onClick={() => void saveSettings(c.id)}>
-                  Apply default settings
-                </Button>
-              ) : null}
-            </Stack>
-          ))}
-        </Stack>
-
-        <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
-          <TextField
-            label="Email domain"
-            placeholder="college.edu"
-            value={domain}
-            onChange={(e) => setDomain(e.target.value)}
-          />
-          <Button variant="outlined" onClick={() => void requestDomain()}>
-            Request domain
-          </Button>
-        </Stack>
-        {domainToken ? (
-          <Alert severity="info">
-            Give operator this domain id + TXT token: {domainToken}
-          </Alert>
-        ) : null}
+              <Typography variant="body2" sx={{ fontFamily: "monospace", mt: 0.5 }}>
+                {domainToken}
+              </Typography>
+            </Alert>
+          ) : null}
+        </SectionCard>
       </Stack>
     </PortalShell>
   );

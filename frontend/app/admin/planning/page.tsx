@@ -9,6 +9,7 @@ import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 import { PlanConfirmBar } from "@/components/planning";
 import PortalShell from "@/features/shell/PortalShell";
+import { PageHeader, SectionCard, StatusChip } from "@/features/ui";
 import { apiGet, apiPost, ApiError } from "@/lib/api";
 import { primaryCollegeId, resolveHomePath, useAuth } from "@/lib/auth";
 import { hasRole } from "@/lib/roles";
@@ -104,30 +105,48 @@ export default function AdminPlanningPage() {
     .length;
 
   return (
-    <PortalShell title="College admin" nav={nav}>
+    <PortalShell title="College admin" description="Cluster and confirm" nav={nav}>
+      <PageHeader
+        title="Planning"
+        description="Run clustering to propose stops, routes, and buses. Confirm locks student assignments."
+      />
+      {error ? (
+        <Alert severity="error" sx={{ mb: 2 }}>
+          {error}
+        </Alert>
+      ) : null}
       <Stack spacing={3}>
-        <Typography variant="h5" sx={{ fontWeight: 700 }}>
-          Planning
-        </Typography>
-        {error ? <Alert severity="error">{error}</Alert> : null}
-        <TextField
-          label="Campus ID"
-          value={campusId}
-          onChange={(e) => setCampusId(e.target.value)}
-        />
-        <TextField
-          label="Import batch ID (optional)"
-          value={batchId}
-          onChange={(e) => setBatchId(e.target.value)}
-        />
-        <Button variant="contained" onClick={() => void runPlanning()}>
-          Run clustering / assignment
-        </Button>
+        <SectionCard title="Run proposal">
+          <Stack spacing={2}>
+            <TextField
+              label="Campus ID"
+              value={campusId}
+              onChange={(e) => setCampusId(e.target.value)}
+              fullWidth
+            />
+            <TextField
+              label="Import batch ID (optional)"
+              value={batchId}
+              onChange={(e) => setBatchId(e.target.value)}
+              fullWidth
+            />
+            <Button
+              variant="contained"
+              onClick={() => void runPlanning()}
+              sx={{ alignSelf: "flex-start" }}
+            >
+              Run clustering / assignment
+            </Button>
+          </Stack>
+        </SectionCard>
         {run ? (
-          <>
-            <Typography>
-              Run {run.id} · status {run.status} · routes {run.routes.length} ·
-              items {run.items.length}
+          <SectionCard
+            title="Proposal result"
+            actions={<StatusChip status={run.status} />}
+          >
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              Run {run.id} · routes {run.routes.length} · items {run.items.length}
+              {typeof review === "number" ? ` · review ${review}` : ""}
             </Typography>
             {run.status === "proposed" ? (
               <PlanConfirmBar
@@ -146,7 +165,7 @@ export default function AdminPlanningPage() {
                 onReject={() => setRun(null)}
               />
             ) : null}
-          </>
+          </SectionCard>
         ) : null}
       </Stack>
     </PortalShell>

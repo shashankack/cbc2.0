@@ -3,14 +3,13 @@
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import Alert from "@mui/material/Alert";
-import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
-import Container from "@mui/material/Container";
+import Link from "@mui/material/Link";
 import Stack from "@mui/material/Stack";
 import TextField from "@mui/material/TextField";
-import Typography from "@mui/material/Typography";
 import { ApiError } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { AuthShell } from "@/features/ui";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -35,38 +34,28 @@ export default function LoginPage() {
   }
 
   return (
-    <Box
-      component="main"
-      sx={{
-        minHeight: "100vh",
-        display: "flex",
-        alignItems: "center",
-        bgcolor: "background.default",
-      }}
+    <AuthShell
+      title="Sign in"
+      subtitle="Enter your academic or operator email. We will send a one-time code."
     >
-      <Container maxWidth="sm">
-        <Stack spacing={3} component="form" onSubmit={onSubmit}>
-          <Typography variant="h4" component="h1" sx={{ fontWeight: 700 }}>
-            Sign in
-          </Typography>
-          <Typography color="text.secondary">
-            Enter your academic or operator email. We will send a one-time code.
-          </Typography>
-          {error ? <Alert severity="error">{error}</Alert> : null}
-          <TextField
-            label="Email"
-            type="email"
-            required
-            fullWidth
-            autoComplete="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-          />
-          <Button type="submit" variant="contained" size="large" disabled={loading}>
-            {loading ? "Sending…" : "Send OTP"}
-          </Button>
-        </Stack>
-      </Container>
-    </Box>
+      <Stack spacing={2.5} component="form" onSubmit={onSubmit}>
+        {error ? <Alert severity="error">{error}</Alert> : null}
+        <TextField
+          label="Email"
+          type="email"
+          required
+          fullWidth
+          autoComplete="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+        />
+        <Button type="submit" variant="contained" size="large" disabled={loading}>
+          {loading ? "Sending…" : "Send OTP"}
+        </Button>
+        <Link href="/" underline="hover" variant="body2" color="text.secondary">
+          Back to home
+        </Link>
+      </Stack>
+    </AuthShell>
   );
 }

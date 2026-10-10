@@ -9,6 +9,7 @@ import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 import { ImportResultSummary } from "@/components/planning";
 import PortalShell from "@/features/shell/PortalShell";
+import { PageHeader, SectionCard } from "@/features/ui";
 import { apiGet, apiRequest, ApiError } from "@/lib/api";
 import { primaryCollegeId, resolveHomePath, useAuth } from "@/lib/auth";
 import { hasRole } from "@/lib/roles";
@@ -79,40 +80,56 @@ export default function AdminImportPage() {
   }
 
   return (
-    <PortalShell title="College admin" nav={nav}>
+    <PortalShell title="College admin" description="Excel / CSV intake" nav={nav}>
+      <PageHeader
+        title="Student import"
+        description="CSV/XLSX columns: name, srn, email, lat, lng. Requires an active domain and campus settings."
+      />
+      {error ? (
+        <Alert severity="error" sx={{ mb: 2 }}>
+          {error}
+        </Alert>
+      ) : null}
       <Stack spacing={3}>
-        <Typography variant="h5" sx={{ fontWeight: 700 }}>
-          Student import
-        </Typography>
-        <Typography color="text.secondary">
-          CSV/XLSX columns: name, srn, email, lat, lng
-        </Typography>
-        {error ? <Alert severity="error">{error}</Alert> : null}
-        <TextField
-          label="Campus ID"
-          value={campusId}
-          onChange={(e) => setCampusId(e.target.value)}
-          helperText={campuses.map((c) => `${c.code}`).join(", ")}
-        />
-        <Button variant="outlined" component="label">
-          Choose file
-          <input
-            hidden
-            type="file"
-            accept=".csv,.xlsx,.xlsm"
-            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-          />
-        </Button>
-        <Typography variant="body2">{file?.name ?? "No file selected"}</Typography>
-        <Button variant="contained" onClick={() => void upload()} disabled={!file}>
-          Upload
-        </Button>
+        <SectionCard title="Upload file">
+          <Stack spacing={2}>
+            <TextField
+              label="Campus ID"
+              value={campusId}
+              onChange={(e) => setCampusId(e.target.value)}
+              helperText={campuses.map((c) => `${c.code}`).join(", ")}
+              fullWidth
+            />
+            <Button variant="outlined" component="label" sx={{ alignSelf: "flex-start" }}>
+              Choose file
+              <input
+                hidden
+                type="file"
+                accept=".csv,.xlsx,.xlsm"
+                onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+              />
+            </Button>
+            <Typography variant="body2" color="text.secondary">
+              {file?.name ?? "No file selected"}
+            </Typography>
+            <Button
+              variant="contained"
+              onClick={() => void upload()}
+              disabled={!file}
+              sx={{ alignSelf: "flex-start" }}
+            >
+              Upload
+            </Button>
+          </Stack>
+        </SectionCard>
         {batch ? (
-          <ImportResultSummary
-            validCount={batch.valid_count}
-            invalidCount={batch.error_count}
-            totalCount={batch.row_count}
-          />
+          <SectionCard title="Import result">
+            <ImportResultSummary
+              validCount={batch.valid_count}
+              invalidCount={batch.error_count}
+              totalCount={batch.row_count}
+            />
+          </SectionCard>
         ) : null}
       </Stack>
     </PortalShell>

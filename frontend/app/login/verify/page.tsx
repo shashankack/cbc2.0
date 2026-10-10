@@ -3,14 +3,14 @@
 import { FormEvent, Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Alert from "@mui/material/Alert";
-import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
-import Container from "@mui/material/Container";
+import Link from "@mui/material/Link";
 import Stack from "@mui/material/Stack";
 import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 import { ApiError } from "@/lib/api";
 import { resolveHomePath, useAuth } from "@/lib/auth";
+import { AuthShell } from "@/features/ui";
 
 function VerifyForm() {
   const router = useRouter();
@@ -36,55 +36,52 @@ function VerifyForm() {
   }
 
   return (
-    <Stack spacing={3} component="form" onSubmit={onSubmit}>
-      <Typography variant="h4" component="h1" sx={{ fontWeight: 700 }}>
-        Enter OTP
-      </Typography>
-      <Typography color="text.secondary">
-        In development, the code is printed in the API server log.
-      </Typography>
-      {error ? <Alert severity="error">{error}</Alert> : null}
-      <TextField
-        label="Email"
-        type="email"
-        required
-        fullWidth
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
-      />
-      <TextField
-        label="One-time code"
-        required
-        fullWidth
-        slotProps={{
-          htmlInput: { inputMode: "numeric", pattern: "[0-9]*", maxLength: 12 },
-        }}
-        value={code}
-        onChange={(e) => setCode(e.target.value)}
-      />
-      <Button type="submit" variant="contained" size="large" disabled={loading}>
-        {loading ? "Verifying…" : "Verify and continue"}
-      </Button>
-    </Stack>
+    <AuthShell
+      title="Enter OTP"
+      subtitle="In development, the code is printed in the API server log."
+    >
+      <Stack spacing={2.5} component="form" onSubmit={onSubmit}>
+        {error ? <Alert severity="error">{error}</Alert> : null}
+        <TextField
+          label="Email"
+          type="email"
+          required
+          fullWidth
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+        />
+        <TextField
+          label="One-time code"
+          required
+          fullWidth
+          autoFocus
+          slotProps={{
+            htmlInput: { inputMode: "numeric", pattern: "[0-9]*", maxLength: 12 },
+          }}
+          value={code}
+          onChange={(e) => setCode(e.target.value)}
+        />
+        <Button type="submit" variant="contained" size="large" disabled={loading}>
+          {loading ? "Verifying…" : "Verify and continue"}
+        </Button>
+        <Link href="/login" underline="hover" variant="body2" color="text.secondary">
+          Use a different email
+        </Link>
+      </Stack>
+    </AuthShell>
   );
 }
 
 export default function VerifyOtpPage() {
   return (
-    <Box
-      component="main"
-      sx={{
-        minHeight: "100vh",
-        display: "flex",
-        alignItems: "center",
-        bgcolor: "background.default",
-      }}
+    <Suspense
+      fallback={
+        <AuthShell title="Enter OTP">
+          <Typography color="text.secondary">Loading…</Typography>
+        </AuthShell>
+      }
     >
-      <Container maxWidth="sm">
-        <Suspense fallback={<Typography>Loading…</Typography>}>
-          <VerifyForm />
-        </Suspense>
-      </Container>
-    </Box>
+      <VerifyForm />
+    </Suspense>
   );
 }

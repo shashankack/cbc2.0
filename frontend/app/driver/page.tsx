@@ -14,6 +14,7 @@ import {
   TripSessionControls,
 } from "@/components/trips";
 import PortalShell from "@/features/shell/PortalShell";
+import { PageHeader, SectionCard, StatusChip } from "@/features/ui";
 import { apiPost, ApiError } from "@/lib/api";
 import { primaryCollegeId, resolveHomePath, useAuth } from "@/lib/auth";
 import { hasRole } from "@/lib/roles";
@@ -140,50 +141,87 @@ export default function DriverPage() {
   if (loading || !user) return null;
 
   return (
-    <PortalShell title="Driver" nav={[{ href: "/driver", label: "Trip" }]}>
-      <Stack spacing={3} sx={{ maxWidth: 640 }}>
-        <Typography variant="h5" sx={{ fontWeight: 700 }}>
-          Trip session
-        </Typography>
-        {error ? <Alert severity="error">{error}</Alert> : null}
+    <PortalShell title="Driver" description="Trip session controls" nav={[{ href: "/driver", label: "Trip" }]}>
+      <PageHeader
+        title="Trip session"
+        description="Start the session to show QR and share live location. End when the trip finishes."
+        actions={
+          trip ? <StatusChip status={sessionStatus === "loading" ? "processing" : sessionStatus} /> : null
+        }
+      />
+      {error ? (
+        <Alert severity="error" sx={{ mb: 2 }}>
+          {error}
+        </Alert>
+      ) : null}
+
+      <Stack spacing={3} sx={{ maxWidth: 720 }}>
         {!trip ? (
-          <Stack spacing={2}>
-            <TextField
-              label="Route ID"
-              value={routeId}
-              onChange={(e) => setRouteId(e.target.value)}
-            />
-            <TextField
-              label="Bus ID"
-              value={busId}
-              onChange={(e) => setBusId(e.target.value)}
-            />
-            <Button variant="contained" onClick={() => void createTrip()}>
-              Create scheduled trip
-            </Button>
-          </Stack>
+          <SectionCard
+            title="Create scheduled trip"
+            description="Use a confirmed route ID and a bus assigned to your driver account."
+          >
+            <Stack spacing={2}>
+              <TextField
+                label="Route ID"
+                value={routeId}
+                onChange={(e) => setRouteId(e.target.value)}
+                fullWidth
+              />
+              <TextField
+                label="Bus ID"
+                value={busId}
+                onChange={(e) => setBusId(e.target.value)}
+                fullWidth
+              />
+              <Button
+                variant="contained"
+                size="large"
+                onClick={() => void createTrip()}
+                sx={{ alignSelf: "flex-start" }}
+              >
+                Create scheduled trip
+              </Button>
+            </Stack>
+          </SectionCard>
         ) : (
           <>
-            <Typography variant="body2">Trip {trip.id}</Typography>
-            <TripSessionControls
-              status={sessionStatus}
-              onStart={() => void start()}
-              onEnd={() => void end()}
-              error={error}
-            />
+            <SectionCard title="Session">
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                Trip {trip.id}
+              </Typography>
+              <TripSessionControls
+                status={sessionStatus}
+                onStart={() => void start()}
+                onEnd={() => void end()}
+                error={error}
+              />
+            </SectionCard>
+
             {qrToken ? (
-              <TripQrPanel status="active" qrValue={qrToken} />
+              <SectionCard title="Boarding QR">
+                <TripQrPanel status="active" qrValue={qrToken} />
+              </SectionCard>
             ) : null}
-            <OrderedStopList
-              stops={itinerary.map((s) => ({
-                id: s.stop_id,
-                sequence: s.sequence,
-                label: s.name,
-                subtitle: `${s.lat.toFixed(4)}, ${s.lng.toFixed(4)}`,
-              }))}
-            />
+
+            <SectionCard title="Ordered stops">
+              <OrderedStopList
+                stops={itinerary.map((s) => ({
+                  id: s.stop_id,
+                  sequence: s.sequence,
+                  label: s.name,
+                  subtitle: `${s.lat.toFixed(4)}, ${s.lng.toFixed(4)}`,
+                }))}
+              />
+            </SectionCard>
+
             {sessionStatus === "active" ? (
-              <DistressButton onDistress={() => void distress()} />
+              <SectionCard
+                title="Emergency"
+                description="Captures your current GPS and proposes replacement capacity."
+              >
+                <DistressButton onDistress={() => void distress()} />
+              </SectionCard>
             ) : null}
           </>
         )}

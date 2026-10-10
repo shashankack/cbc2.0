@@ -6,12 +6,17 @@ import Alert from "@mui/material/Alert";
 import Button from "@mui/material/Button";
 import Stack from "@mui/material/Stack";
 import TextField from "@mui/material/TextField";
-import Typography from "@mui/material/Typography";
 import { BoardingScanPanel } from "@/components/trips";
 import PortalShell from "@/features/shell/PortalShell";
+import { PageHeader, SectionCard } from "@/features/ui";
 import { apiPost, ApiError } from "@/lib/api";
 import { primaryCollegeId, resolveHomePath, useAuth } from "@/lib/auth";
 import { hasRole } from "@/lib/roles";
+
+const NAV = [
+  { href: "/student", label: "Assignment" },
+  { href: "/student/board", label: "Board" },
+];
 
 export default function StudentBoardPage() {
   const router = useRouter();
@@ -59,49 +64,41 @@ export default function StudentBoardPage() {
   if (loading || !user) return null;
 
   return (
-    <PortalShell
-      title="Student"
-      nav={[
-        { href: "/student", label: "Assignment" },
-        { href: "/student/board", label: "Board" },
-      ]}
-    >
-      <Stack
-        spacing={3}
-        component="form"
-        onSubmit={board}
-        sx={{ maxWidth: 520 }}
-      >
-        <Typography variant="h5" sx={{ fontWeight: 700 }}>
-          Board with QR token
-        </Typography>
-        <TextField
-          label="Trip ID"
-          value={tripId}
-          onChange={(e) => setTripId(e.target.value)}
-          fullWidth
-        />
-        <TextField
-          label="QR token"
-          value={token}
-          onChange={(e) => setToken(e.target.value)}
-          fullWidth
-        />
-        <Button type="submit" variant="contained">
-          Submit token
-        </Button>
-        <BoardingScanPanel
-          status={status}
-          message={message}
-          onRetry={() => {
-            setStatus("idle");
-            setMessage(null);
-          }}
-        />
-        {status === "error" && message ? (
-          <Alert severity="error">{message}</Alert>
-        ) : null}
-      </Stack>
+    <PortalShell title="Student" description="QR boarding" nav={NAV}>
+      <PageHeader
+        title="Board with QR"
+        description="Enter the active trip ID and the token shown on the driver’s panel."
+      />
+      <SectionCard>
+        <Stack spacing={2.5} component="form" onSubmit={board} sx={{ maxWidth: 520 }}>
+          <TextField
+            label="Trip ID"
+            value={tripId}
+            onChange={(e) => setTripId(e.target.value)}
+            fullWidth
+          />
+          <TextField
+            label="QR token"
+            value={token}
+            onChange={(e) => setToken(e.target.value)}
+            fullWidth
+          />
+          <Button type="submit" variant="contained" size="large">
+            Submit token
+          </Button>
+          <BoardingScanPanel
+            status={status}
+            message={message}
+            onRetry={() => {
+              setStatus("idle");
+              setMessage(null);
+            }}
+          />
+          {status === "error" && message ? (
+            <Alert severity="error">{message}</Alert>
+          ) : null}
+        </Stack>
+      </SectionCard>
     </PortalShell>
   );
 }
