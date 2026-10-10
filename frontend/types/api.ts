@@ -200,4 +200,20 @@ export type Trip = {
   last_lat: number | null;
   last_lng: number | null;
   last_location_at: string | null;
+  route_name?: string | null;
+  bus_registration?: string | null;
+  driver_email?: string | null;
+  duration_seconds?: number | null;
+};
+
+export type DriverDuty = {
+  bus_id: string;
+  bus_registration: string;
+  route_id: string;
+  route_name: string;
+  campus_id: string;
+  trip: Trip | null;
+  can_start: boolean;
+  can_end: boolean;
+  can_distress: boolean;
 };

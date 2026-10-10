@@ -500,5 +500,19 @@ def confirm_planning_run(
 
     run.status = PlanningRunStatus.CONFIRMED
     run.confirmed_at = utcnow()
+
+    # Auto-schedule today's trips for each confirmed route/bus/driver pairing.
+    from app.services import trips as trip_service
+
+    trip_service.schedule_trips_for_assignments(
+        db,
+        college_id,
+        [
+            (item.route_id, item.bus_id)  # type: ignore[arg-type]
+            for item in confirmable
+            if item.route_id and item.bus_id
+        ],
+    )
+
     db.commit()
     return get_planning_run(db, college_id, run.id)

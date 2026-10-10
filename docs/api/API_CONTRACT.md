@@ -74,8 +74,11 @@
 
 | Method | Path | Auth | Purpose |
 |--------|------|------|---------|
-| GET | `/colleges/{college_id}/trips` | driver or college_admin | List trips (`?status=` optional; drivers see own only) |
-| POST | `/colleges/{college_id}/trips` | driver or college_admin | Create scheduled trip |
+| GET | `/colleges/{college_id}/me/driver-duty` | driver | Today's auto assignment (bus + route + trip flags) |
+| POST | `/colleges/{college_id}/me/driver-duty/start` | driver | Auto-schedule if needed, start trip, return QR + itinerary (`started_at` logged) |
+| POST | `/colleges/{college_id}/me/driver-duty/end` | driver | End active trip (`ended_at` logged) |
+| GET | `/colleges/{college_id}/trips` | driver or college_admin | List trips (`?status=` optional; includes start/end/duration for analytics) |
+| POST | `/colleges/{college_id}/trips` | driver or college_admin | Create scheduled trip (optional; planning confirm auto-schedules) |
 | POST | `/colleges/{college_id}/trips/{trip_id}/start` | driver | Start session + QR + itinerary |
 | POST | `/colleges/{college_id}/trips/{trip_id}/qr/refresh` | driver | New QR token |
 | POST | `/colleges/{college_id}/trips/{trip_id}/end` | driver | End session (invalidates QR) |

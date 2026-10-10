@@ -14,6 +14,7 @@ from app.schemas.trips import (
     BoardRequest,
     DistressIn,
     DistressOut,
+    DriverDutyOut,
     EmergencyOut,
     ItineraryStopOut,
     LocationOut,
@@ -29,6 +30,55 @@ from app.services.auth import require_college_roles
 router = APIRouter(tags=["trips"])
 
 
+def _trip_out(db: DbSession, trip) -> TripOut:
+    return TripOut.model_validate(trip_service.serialize_trip(db, trip))
+
+
+@router.get(
+    "/colleges/{college_id}/me/driver-duty",
+    response_model=DriverDutyOut,
+)
+def get_driver_duty(
+    college_id: uuid.UUID,
+    db: DbSession,
+    user: CurrentUser,
+) -> DriverDutyOut:
+    return DriverDutyOut.model_validate(
+        trip_service.get_driver_duty(db, college_id, user)
+    )
+
+
+@router.post(
+    "/colleges/{college_id}/me/driver-duty/start",
+    response_model=TripStartOut,
+)
+def start_driver_duty(
+    college_id: uuid.UUID,
+    db: DbSession,
+    user: CurrentUser,
+) -> TripStartOut:
+    result = trip_service.start_driver_duty(db, college_id, user)
+    return TripStartOut(
+        trip=TripOut.model_validate(result["trip"]),
+        qr_token=result["qr_token"],
+        expires_in_seconds=result["expires_in_seconds"],
+        itinerary=[ItineraryStopOut(**s) for s in result["itinerary"]],
+    )
+
+
+@router.post(
+    "/colleges/{college_id}/me/driver-duty/end",
+    response_model=TripOut,
+)
+def end_driver_duty(
+    college_id: uuid.UUID,
+    db: DbSession,
+    user: CurrentUser,
+) -> TripOut:
+    trip = trip_service.end_driver_duty(db, college_id, user)
+    return _trip_out(db, trip)
+
+
 @router.get(
     "/colleges/{college_id}/trips",
     response_model=list[TripOut],
@@ -40,7 +90,7 @@ def list_trips(
     status: Annotated[str | None, Query()] = None,
 ) -> list[TripOut]:
     rows = trip_service.list_trips(db, college_id, user, status=status)
-    return [TripOut.model_validate(t) for t in rows]
+    return [_trip_out(db, t) for t in rows]
 
 
 @router.post(
@@ -61,7 +111,7 @@ def create_trip(
         bus_id=body.bus_id,
         actor=user,
     )
-    return TripOut.model_validate(trip)
+    return _trip_out(db, trip)
 
 
 @router.post(
@@ -76,7 +126,7 @@ def start_trip(
 ) -> TripStartOut:
     result = trip_service.start_trip(db, college_id, trip_id, user)
     return TripStartOut(
-        trip=TripOut.model_validate(result["trip"]),
+        trip=_trip_out(db, result["trip"]),
         qr_token=result["qr_token"],
         expires_in_seconds=result["expires_in_seconds"],
         itinerary=[ItineraryStopOut(**s) for s in result["itinerary"]],
@@ -108,7 +158,7 @@ def end_trip(
     user: CurrentUser,
 ) -> TripOut:
     trip = trip_service.end_trip(db, college_id, trip_id, user)
-    return TripOut.model_validate(trip)
+    return _trip_out(db, trip)
 
 
 @router.get(
@@ -142,7 +192,7 @@ def ping_location(
     trip = trip_service.ping_location(
         db, college_id, trip_id, user, lat=body.lat, lng=body.lng
     )
-    return TripOut.model_validate(trip)
+    return _trip_out(db, trip)
 
 
 @router.get(

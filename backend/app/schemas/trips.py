@@ -28,6 +28,22 @@ class TripOut(ORMModel):
     last_lat: float | None
     last_lng: float | None
     last_location_at: datetime | None
+    route_name: str | None = None
+    bus_registration: str | None = None
+    driver_email: str | None = None
+    duration_seconds: int | None = None
+
+
+class DriverDutyOut(BaseModel):
+    bus_id: UUID
+    bus_registration: str
+    route_id: UUID
+    route_name: str
+    campus_id: UUID
+    trip: TripOut | None = None
+    can_start: bool
+    can_end: bool
+    can_distress: bool
 
 
 class ItineraryStopOut(BaseModel):

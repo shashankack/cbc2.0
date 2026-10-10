@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import secrets
 import uuid
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
@@ -37,6 +37,283 @@ QR_TTL_SECONDS = 300
 
 def _hash_qr(raw: str) -> str:
     return hash_secret(f"qr:{raw}")
+
+
+def _utc_day_start(now: datetime | None = None) -> datetime:
+    current = now or utcnow()
+    if current.tzinfo is None:
+        current = current.replace(tzinfo=timezone.utc)
+    current = current.astimezone(timezone.utc)
+    return current.replace(hour=0, minute=0, second=0, microsecond=0)
+
+
+def serialize_trip(db: Session, trip: Trip) -> dict:
+    route = db.get(Route, trip.route_id)
+    bus = db.get(Bus, trip.bus_id)
+    driver = db.get(User, trip.driver_user_id)
+    duration = None
+    if trip.started_at is not None and trip.ended_at is not None:
+        duration = int((trip.ended_at - trip.started_at).total_seconds())
+    return {
+        "id": trip.id,
+        "college_id": trip.college_id,
+        "campus_id": trip.campus_id,
+        "route_id": trip.route_id,
+        "bus_id": trip.bus_id,
+        "driver_user_id": trip.driver_user_id,
+        "status": trip.status,
+        "started_at": trip.started_at,
+        "ended_at": trip.ended_at,
+        "last_lat": trip.last_lat,
+        "last_lng": trip.last_lng,
+        "last_location_at": trip.last_location_at,
+        "route_name": route.name if route else None,
+        "bus_registration": bus.registration_number if bus else None,
+        "driver_email": driver.email if driver else None,
+        "duration_seconds": duration,
+    }
+
+
+def resolve_driver_assignment(
+    db: Session, college_id: uuid.UUID, driver: User
+) -> dict:
+    """Bus assigned to driver + confirmed route from locked allocations."""
+    bus = db.scalar(
+        select(Bus).where(
+            Bus.college_id == college_id,
+            Bus.driver_user_id == driver.id,
+        )
+    )
+    if bus is None:
+        raise AppError(
+            "CONFLICT",
+            "No bus is assigned to your driver account. Ask college admin.",
+            status_code=409,
+        )
+    if bus.status == BusStatus.UNAVAILABLE:
+        raise AppError(
+            "CONFLICT",
+            f"Bus {bus.registration_number} is unavailable (maintenance).",
+            status_code=409,
+        )
+
+    alloc = db.scalar(
+        select(Allocation)
+        .where(
+            Allocation.college_id == college_id,
+            Allocation.bus_id == bus.id,
+        )
+        .order_by(Allocation.created_at.desc())
+    )
+    if alloc is None:
+        raise AppError(
+            "CONFLICT",
+            "No confirmed route for your bus yet. Wait for admin planning confirm.",
+            status_code=409,
+        )
+    route = db.get(Route, alloc.route_id)
+    if route is None or route.status != RouteStatus.CONFIRMED:
+        raise AppError(
+            "CONFLICT",
+            "Assigned route is not confirmed.",
+            status_code=409,
+        )
+    return {
+        "bus": bus,
+        "route": route,
+        "campus_id": route.campus_id,
+    }
+
+
+def _today_trip_for_assignment(
+    db: Session,
+    *,
+    college_id: uuid.UUID,
+    driver_user_id: uuid.UUID,
+    bus_id: uuid.UUID,
+    route_id: uuid.UUID,
+) -> Trip | None:
+    day_start = _utc_day_start()
+    return db.scalar(
+        select(Trip)
+        .where(
+            Trip.college_id == college_id,
+            Trip.driver_user_id == driver_user_id,
+            Trip.bus_id == bus_id,
+            Trip.route_id == route_id,
+            Trip.created_at >= day_start,
+        )
+        .order_by(Trip.created_at.desc())
+    )
+
+
+def ensure_scheduled_trip(
+    db: Session,
+    *,
+    college_id: uuid.UUID,
+    route_id: uuid.UUID,
+    bus_id: uuid.UUID,
+    driver_user_id: uuid.UUID,
+    campus_id: uuid.UUID,
+) -> Trip:
+    """Idempotent daily scheduled trip for a route/bus/driver assignment."""
+    existing = _today_trip_for_assignment(
+        db,
+        college_id=college_id,
+        driver_user_id=driver_user_id,
+        bus_id=bus_id,
+        route_id=route_id,
+    )
+    if existing is not None:
+        return existing
+
+    trip = Trip(
+        college_id=college_id,
+        campus_id=campus_id,
+        route_id=route_id,
+        bus_id=bus_id,
+        driver_user_id=driver_user_id,
+        status=TripStatus.SCHEDULED,
+    )
+    db.add(trip)
+    db.flush()
+    return trip
+
+
+def schedule_trips_for_assignments(
+    db: Session,
+    college_id: uuid.UUID,
+    assignments: list[tuple[uuid.UUID, uuid.UUID]],
+) -> int:
+    """Create today's scheduled trips for (route_id, bus_id) pairs. Returns count created/ensured."""
+    count = 0
+    seen: set[tuple[uuid.UUID, uuid.UUID]] = set()
+    for route_id, bus_id in assignments:
+        key = (route_id, bus_id)
+        if key in seen:
+            continue
+        seen.add(key)
+        bus = db.get(Bus, bus_id)
+        route = db.get(Route, route_id)
+        if bus is None or route is None or bus.driver_user_id is None:
+            continue
+        if bus.college_id != college_id or route.college_id != college_id:
+            continue
+        ensure_scheduled_trip(
+            db,
+            college_id=college_id,
+            route_id=route_id,
+            bus_id=bus_id,
+            driver_user_id=bus.driver_user_id,
+            campus_id=route.campus_id,
+        )
+        count += 1
+    return count
+
+
+def get_driver_duty(db: Session, college_id: uuid.UUID, actor: User) -> dict:
+    from app.services.auth import require_college_roles
+
+    require_college_roles(db, actor, college_id, {"driver"})
+    assignment = resolve_driver_assignment(db, college_id, actor)
+    bus: Bus = assignment["bus"]
+    route: Route = assignment["route"]
+    trip = _today_trip_for_assignment(
+        db,
+        college_id=college_id,
+        driver_user_id=actor.id,
+        bus_id=bus.id,
+        route_id=route.id,
+    )
+    status = trip.status if trip else None
+    return {
+        "bus_id": bus.id,
+        "bus_registration": bus.registration_number,
+        "route_id": route.id,
+        "route_name": route.name,
+        "campus_id": route.campus_id,
+        "trip": serialize_trip(db, trip) if trip else None,
+        "can_start": status in {None, TripStatus.SCHEDULED, TripStatus.ENDED},
+        "can_end": status == TripStatus.ACTIVE,
+        "can_distress": status == TripStatus.ACTIVE,
+    }
+
+
+def start_driver_duty(db: Session, college_id: uuid.UUID, actor: User) -> dict:
+    from app.services.auth import require_college_roles
+
+    require_college_roles(db, actor, college_id, {"driver"})
+    assignment = resolve_driver_assignment(db, college_id, actor)
+    bus: Bus = assignment["bus"]
+    route: Route = assignment["route"]
+
+    active = db.scalar(
+        select(Trip).where(
+            Trip.college_id == college_id,
+            Trip.driver_user_id == actor.id,
+            Trip.status == TripStatus.ACTIVE,
+        )
+    )
+    if active is not None:
+        # Resume: refresh QR for the already-active session.
+        qr = refresh_qr(db, college_id, active.id, actor)
+        itinerary = get_trip_itinerary(db, college_id, active.id)
+        return {
+            "trip": serialize_trip(db, active),
+            "qr_token": qr["qr_token"],
+            "expires_in_seconds": qr["expires_in_seconds"],
+            "itinerary": itinerary,
+        }
+
+    trip = _today_trip_for_assignment(
+        db,
+        college_id=college_id,
+        driver_user_id=actor.id,
+        bus_id=bus.id,
+        route_id=route.id,
+    )
+    if trip is None or trip.status == TripStatus.ENDED:
+        trip = Trip(
+            college_id=college_id,
+            campus_id=route.campus_id,
+            route_id=route.id,
+            bus_id=bus.id,
+            driver_user_id=actor.id,
+            status=TripStatus.SCHEDULED,
+        )
+        db.add(trip)
+        db.commit()
+        db.refresh(trip)
+    elif trip.status != TripStatus.SCHEDULED:
+        raise AppError(
+            "CONFLICT",
+            f"Cannot start trip in status {trip.status}.",
+            status_code=409,
+        )
+
+    result = start_trip(db, college_id, trip.id, actor)
+    return {
+        "trip": serialize_trip(db, result["trip"]),
+        "qr_token": result["qr_token"],
+        "expires_in_seconds": result["expires_in_seconds"],
+        "itinerary": result["itinerary"],
+    }
+
+
+def end_driver_duty(db: Session, college_id: uuid.UUID, actor: User) -> Trip:
+    from app.services.auth import require_college_roles
+
+    require_college_roles(db, actor, college_id, {"driver"})
+    active = db.scalar(
+        select(Trip).where(
+            Trip.college_id == college_id,
+            Trip.driver_user_id == actor.id,
+            Trip.status == TripStatus.ACTIVE,
+        )
+    )
+    if active is None:
+        raise AppError("CONFLICT", "No active trip to end.", status_code=409)
+    return end_trip(db, college_id, active.id, actor)
 
 
 def create_trip(
