@@ -29,18 +29,24 @@ scripts/    Utility scripts
 ## Quick start
 
 ```powershell
+# Postgres (Docker)
+docker compose up -d
+
 # Frontend
 cd frontend
 npm install
 npm run dev
 
-# Backend
+# Backend (other terminal)
 cd backend
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
+copy .env.example .env
 uvicorn app.main:app --reload --port 8000
 ```
+
+Docker details: [docs/development/DOCKER.md](docs/development/DOCKER.md)
 
 ## Branches
 

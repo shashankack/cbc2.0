@@ -1,32 +1,41 @@
-# Data model (draft)
+# Data model
 
 API surface: [../api/API_CONTRACT.md](../api/API_CONTRACT.md).
 
-Use UUIDs. Tenant-owned tables carry `college_id`.
+Use UUIDs. Tenant-owned tables carry `college_id` where appropriate.
 
-## Suggested entities
+## Stage 3 — Tenant foundation (implement now)
 
-- `colleges`, `college_domains`, `users`, `college_memberships`, `otp_challenges`, `college_applications`
-- `campuses`, `campus_settings` (max walk, cluster `eps_m`, `min_samples`, etc.)
+| Table | Purpose | Key fields / constraints |
+|-------|---------|---------------------------|
+| `users` | Global login identity | `id`, `email` (unique, normalized lowercase), `full_name`, `is_platform_operator`, `created_at` |
+| `college_applications` | Operator onboarding queue | `id`, `college_name`, `slug`, `applicant_email`, `status` (`pending`/`approved`/`rejected`), timestamps |
+| `colleges` | Tenant workspace | `id`, `name`, `slug` (unique), `status` (`active`/`suspended`), `created_at` |
+| `college_domains` | Verified email domains | `id`, `college_id`, `domain` (unique when active), `dns_txt_token`, `dns_verified_at`, `status` (`pending`/`active`/`rejected`) |
+| `college_memberships` | User↔college role | `id`, `college_id`, `user_id`, `role` (`college_admin`/`student`/`driver`), unique `(college_id, user_id, role)` |
+| `campuses` | Campus under a college | `id`, `college_id`, `name`, `code`, unique `(college_id, code)` |
+| `campus_settings` | Per-campus planning knobs | `id`, `college_id`, `campus_id` (unique with college), `max_walk_to_stop_m`, `cluster_eps_m`, `cluster_min_samples`, `min_students_per_route` |
+| `otp_challenges` | Email OTP | `id`, `email`, `code_hash`, `expires_at`, `attempts`, `consumed_at` |
+
+Cross-college FKs must not allow a campus/domain/membership to reference another college’s rows (enforce `college_id` consistency in app + DB checks where practical).
+
+## Later stages (do not implement yet)
+
 - `buses`, `routes`, `stops`, `route_stops`
-- `students` (SRN, email, locked stop/route after confirm)
-- `student_import_batches`, `student_import_rows`
-- `planning_runs` (cluster/route/bus proposals), `planning_run_items`
-- `allocations` (confirmed seat/route/stop assignment)
-- `trips` (status: e.g. `scheduled` / `active` / `ended`; `started_at` / `ended_at`; ended only via driver action)
-- `trip_qr_tokens`, `boarding_records` (attendance)
-- `trip_location_pings` (or last-known fields on `trips`: lat, lng, recorded_at) — **driver device only**, while trip is active
-- `distress_events` (trip_id, bus_id, lat, lng, recorded_at, status)
-- `emergency_reallocations` / reassignment proposals linked to distress (suggested buses, remaining students/stops, admin confirm)
+- `students`, import batches/rows
+- `planning_runs`, `planning_run_items`, `allocations`
+- `trips`, `trip_qr_tokens`, `boarding_records`, `trip_location_pings`
+- `distress_events`, `emergency_reallocations`
 - `audit_logs`
 
-## Important constraints
+## Important constraints (product-wide)
 
-- Unique SRN / email within college scope as defined.
-- One active locked stop/route assignment per student per planning period.
-- Capacity enforced transactionally on confirm.
-- Unique `(trip_id, student_id)` boarding/attendance.
-- A trip accepts boarding scans only while `active`; after manual end, scans are rejected.
-- Outliers may sit in `needs_admin_review` until resolved.
+- Normalized email uniqueness on `users`.
+- College slug uniqueness.
+- Exact active domain uniqueness.
+- Unique `(college_id, campus_id)` campus setting.
+- A campus must have valid settings before planning/allocation is enabled.
+- Capacity enforced transactionally on plan confirm (later).
+- Unique `(trip_id, student_id)` boarding (later).
 
 See [ROUTING_AND_CLUSTERING.md](./ROUTING_AND_CLUSTERING.md).

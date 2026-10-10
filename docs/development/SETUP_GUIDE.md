@@ -5,12 +5,29 @@
 - Node.js 20+
 - Python 3.11+
 - Git
-- PostgreSQL 16 (from Stage 3 onward)
+- Docker Desktop (for Postgres) — see [DOCKER.md](./DOCKER.md)
 
 ## Environment
 
-1. Copy `.env.example` → `.env` (never commit `.env`).
-2. Copy `NEXT_PUBLIC_API_BASE_URL` into `frontend/.env.local`.
+1. Copy `.env.example` → `.env` at repo root (optional reference).
+2. Copy `backend/.env.example` → `backend/.env`.
+3. Copy `NEXT_PUBLIC_API_BASE_URL` into `frontend/.env.local`.
+
+Default local DB URL (matches Docker Compose):
+
+```env
+DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:5432/college_bus
+```
+
+## Database (Docker)
+
+```powershell
+cd c:\crucifer\CBC
+docker compose up -d
+docker compose ps
+```
+
+Details: [DOCKER.md](./DOCKER.md).
 
 ## Frontend
 
@@ -29,6 +46,7 @@ cd backend
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
+copy .env.example .env
 uvicorn app.main:app --reload --port 8000
 ```
 
