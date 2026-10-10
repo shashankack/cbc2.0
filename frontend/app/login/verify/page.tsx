@@ -27,7 +27,18 @@ function VerifyForm() {
     setError(null);
     try {
       const me = await verifyOtp(email.trim(), code.trim());
-      router.replace(resolveHomePath(me));
+      const home = resolveHomePath(me);
+      if (
+        home === "/" &&
+        !me.is_platform_operator &&
+        me.memberships.length === 0
+      ) {
+        setError(
+          "Signed in, but this email has no college role yet. A college admin must import the student (or assign driver/admin) before the portal opens.",
+        );
+        return;
+      }
+      router.replace(home);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Verification failed.");
     } finally {
