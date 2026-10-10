@@ -1,17 +1,17 @@
 openapi: 3.0.3
 info:
   title: College Bus Route & Seat Allocation API
-  version: 0.1.0
+  version: 0.2.0
   description: >
-    Draft OpenAPI stub. Authoritative conventions live in docs/api/API_CONTRACT.md.
-    Endpoint inventory expands from Stage 4 onward.
+    Draft OpenAPI. Conventions in docs/api/API_CONTRACT.md.
+    No ML endpoints.
 servers:
   - url: http://localhost:8000
     description: Local FastAPI
 paths:
   /api/v1/health:
     get:
-      summary: Liveness / smoke check
+      summary: Liveness
       operationId: getHealth
       responses:
         "200":
@@ -25,6 +25,24 @@ paths:
                   status:
                     type: string
                     example: ok
+  /api/v1/ready:
+    get:
+      summary: Readiness including database check
+      operationId: getReady
+      responses:
+        "200":
+          description: Readiness payload
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status, database]
+                properties:
+                  status:
+                    type: string
+                    example: ok
+                  database:
+                    type: boolean
 components:
   schemas:
     ApiError:

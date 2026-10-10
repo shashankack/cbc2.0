@@ -8,6 +8,12 @@ client = TestClient(app)
 def test_health() -> None:
     response = client.get("/api/v1/health")
     assert response.status_code == 200
+    assert response.json() == {"status": "ok"}
+
+
+def test_ready_endpoint_exists() -> None:
+    response = client.get("/api/v1/ready")
+    assert response.status_code == 200
     body = response.json()
-    assert body["status"] == "ok"
-    assert body["ml"] == "disabled"
+    assert "status" in body
+    assert "database" in body
