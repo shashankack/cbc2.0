@@ -28,6 +28,22 @@ class TripOut(ORMModel):
     last_lat: float | None
     last_lng: float | None
     last_location_at: datetime | None
+    route_name: str | None = None
+    bus_registration: str | None = None
+    driver_email: str | None = None
+    duration_seconds: int | None = None
+
+
+class DriverDutyOut(BaseModel):
+    bus_id: UUID
+    bus_registration: str
+    route_id: UUID
+    route_name: str
+    campus_id: UUID
+    trip: TripOut | None = None
+    can_start: bool
+    can_end: bool
+    can_distress: bool
 
 
 class ItineraryStopOut(BaseModel):
@@ -100,3 +116,25 @@ class EmergencyOut(ORMModel):
 class DistressOut(BaseModel):
     distress_event: DistressEventOut
     emergency_reallocation: EmergencyOut
+
+
+class AttendanceRowOut(BaseModel):
+    trip_id: UUID
+    status: str
+    route_name: str | None = None
+    bus_registration: str | None = None
+    started_at: datetime | None = None
+    ended_at: datetime | None = None
+    assigned_count: int
+    boarded_count: int
+    no_show_count: int
+
+
+class DisruptionProposalOut(BaseModel):
+    bus_id: UUID
+    status: str
+    affected_count: int
+    replacement_buses: list[dict] = []
+    emergency_reallocation_id: UUID | None = None
+    plan: dict | None = None
+    note: str | None = None

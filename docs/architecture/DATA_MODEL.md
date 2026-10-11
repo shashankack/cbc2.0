@@ -9,7 +9,7 @@ Use UUIDs. Tenant-owned tables carry `college_id` where appropriate.
 | Table | Purpose |
 |-------|---------|
 | `users`, `college_applications`, `colleges`, `college_domains`, `college_memberships` | Tenancy + roles |
-| `campuses`, `campus_settings` | Campus + planning knobs |
+| `campuses`, `campus_settings` | Campus + depot `lat`/`lng` + planning knobs |
 | `otp_challenges`, `auth_sessions` | Auth |
 
 ## Stage 4 — Fleet, import, planning (implement now)
@@ -21,8 +21,8 @@ Use UUIDs. Tenant-owned tables carry `college_id` where appropriate.
 | `student_import_rows` | Per-row validation | `batch_id`, `row_number`, `status` (`valid`/`invalid`), `error_message`, `student_id` |
 | `students` | Imported students | `college_id`, `campus_id`, `user_id`, `srn`, `email`, `full_name`, `home_lat`, `home_lng`, `status` (`imported`/`needs_admin_review`/`allocated`/`locked`); unique `(college_id, srn)`, `(college_id, email)` |
 | `planning_runs` | Cluster/route proposal | `college_id`, `campus_id`, `import_batch_id`, `status` (`draft`/`proposed`/`confirmed`/`cancelled`) |
-| `stops` | Pick/drop points | `college_id`, `campus_id`, `name`, `lat`, `lng`, `source` (`cluster`/`manual`), `planning_run_id` |
-| `routes` | Ordered stop groups | `college_id`, `campus_id`, `name`, `status` (`draft`/`confirmed`), `planning_run_id` |
+| `stops` | Pick/drop points | `college_id`, `campus_id`, `name`, `lat`, `lng`, `source` (`cluster`/`manual`/`campus`), `planning_run_id` |
+| `routes` | Ordered stop groups | `college_id`, `campus_id`, `name`, `status` (`draft`/`confirmed`), `planning_run_id`; `route_stops` bookend campus depot |
 | `route_stops` | Ordered itinerary | `college_id`, `route_id`, `stop_id`, `sequence`; unique `(route_id, sequence)` |
 | `planning_run_items` | Per-student proposal | `planning_run_id`, `student_id`, `stop_id`, `route_id`, `bus_id`, `status` (`proposed`/`snapped`/`needs_admin_review`/`confirmed`) |
 | `allocations` | Locked assignment after confirm | `college_id`, `planning_run_id`, `student_id` unique active, `stop_id`, `route_id`, `bus_id` |

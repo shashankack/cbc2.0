@@ -73,6 +73,29 @@ def request_domain(
     return row
 
 
+def list_domains(
+    db: Session, *, status: str | None = None
+) -> list[CollegeDomain]:
+    stmt = select(CollegeDomain).order_by(CollegeDomain.created_at.desc())
+    if status:
+        stmt = stmt.where(CollegeDomain.status == status)
+    return list(db.scalars(stmt).all())
+
+
+def serialize_domain(db: Session, domain: CollegeDomain) -> dict:
+    college = db.get(College, domain.college_id)
+    return {
+        "id": domain.id,
+        "college_id": domain.college_id,
+        "college_name": college.name if college else None,
+        "domain": domain.domain,
+        "status": domain.status,
+        "dns_txt_token": domain.dns_txt_token,
+        "dns_verified_at": domain.dns_verified_at,
+        "created_at": domain.created_at,
+    }
+
+
 def approve_domain(db: Session, domain_id: uuid.UUID) -> CollegeDomain:
     domain = db.get(CollegeDomain, domain_id)
     if domain is None:
@@ -111,6 +134,26 @@ def approve_domain(db: Session, domain_id: uuid.UUID) -> CollegeDomain:
     return domain
 
 
+def reject_domain(
+    db: Session, domain_id: uuid.UUID, *, notes: str | None = None
+) -> CollegeDomain:
+    domain = db.get(CollegeDomain, domain_id)
+    if domain is None:
+        raise AppError("NOT_FOUND", "Domain request not found.", status_code=404)
+    if domain.status != DomainStatus.PENDING:
+        raise AppError(
+            "CONFLICT",
+            "Only pending domains can be rejected.",
+            status_code=409,
+        )
+    domain.status = DomainStatus.REJECTED
+    # notes not persisted on domain model — ignore or log
+    _ = notes
+    db.commit()
+    db.refresh(domain)
+    return domain
+
+
 def list_campuses(db: Session, college_id: uuid.UUID) -> list[Campus]:
     get_college_or_404(db, college_id)
     return list(
@@ -123,17 +166,33 @@ def list_campuses(db: Session, college_id: uuid.UUID) -> list[Campus]:
     )
 
 
+def _validate_coords(lat: float | None, lng: float | None) -> None:
+    if (lat is None) != (lng is None):
+        raise AppError(
+            "VALIDATION_ERROR",
+            "Campus lat and lng must be set together.",
+            status_code=422,
+        )
+    if lat is not None and not (-90 <= lat <= 90):
+        raise AppError("VALIDATION_ERROR", "lat out of range.", status_code=422)
+    if lng is not None and not (-180 <= lng <= 180):
+        raise AppError("VALIDATION_ERROR", "lng out of range.", status_code=422)
+
+
 def create_campus(
     db: Session,
     college_id: uuid.UUID,
     *,
     name: str,
     code: str,
+    lat: float | None = None,
+    lng: float | None = None,
 ) -> Campus:
     get_college_or_404(db, college_id)
     cleaned_code = code.strip().upper()
     if not cleaned_code:
         raise AppError("VALIDATION_ERROR", "Campus code is required.", status_code=422)
+    _validate_coords(lat, lng)
 
     exists = db.scalar(
         select(Campus).where(
@@ -152,8 +211,44 @@ def create_campus(
         college_id=college_id,
         name=name.strip(),
         code=cleaned_code,
+        lat=lat,
+        lng=lng,
     )
     db.add(campus)
+    db.commit()
+    db.refresh(campus)
+    return campus
+
+
+def update_campus(
+    db: Session,
+    college_id: uuid.UUID,
+    campus_id: uuid.UUID,
+    *,
+    name: str | None = None,
+    lat: float | None = None,
+    lng: float | None = None,
+    set_coords: bool = False,
+) -> Campus:
+    campus = db.scalar(
+        select(Campus)
+        .where(Campus.id == campus_id, Campus.college_id == college_id)
+        .options(selectinload(Campus.settings))
+    )
+    if campus is None:
+        raise AppError("NOT_FOUND", "Campus not found.", status_code=404)
+
+    if name is not None:
+        cleaned = name.strip()
+        if not cleaned:
+            raise AppError("VALIDATION_ERROR", "Campus name is required.", status_code=422)
+        campus.name = cleaned
+
+    if set_coords:
+        _validate_coords(lat, lng)
+        campus.lat = lat
+        campus.lng = lng
+
     db.commit()
     db.refresh(campus)
     return campus

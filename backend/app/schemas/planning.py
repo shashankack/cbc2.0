@@ -15,6 +15,38 @@ class PlanningRunCreate(BaseModel):
     import_batch_id: UUID | None = None
 
 
+class ReviewItemAssign(BaseModel):
+    stop_id: UUID
+    route_id: UUID | None = None
+    bus_id: UUID | None = None
+
+
+class ManualStopCreate(BaseModel):
+    name: str
+    lat: float
+    lng: float
+    # Optional route to attach the new pickup (appended before return to campus).
+    route_id: UUID | None = None
+
+
+class MergeStopsIn(BaseModel):
+    keep_stop_id: UUID
+    merge_stop_id: UUID
+
+
+class SplitStopIn(BaseModel):
+    stop_id: UUID
+    name: str
+    lat: float
+    lng: float
+    student_ids: list[UUID]
+
+
+class ReorderRouteStopsIn(BaseModel):
+    """Ordered pickup stop IDs (campus bookends applied automatically)."""
+    stop_ids: list[UUID]
+
+
 class StopOut(ORMModel):
     id: UUID
     name: str

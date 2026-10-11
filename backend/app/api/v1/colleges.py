@@ -14,6 +14,7 @@ from app.schemas.colleges import (
     CampusOut,
     CampusSettingsOut,
     CampusSettingsUpdate,
+    CampusUpdate,
     DomainCreate,
     DomainOut,
 )
@@ -63,6 +64,33 @@ def create_campus(
         college_id,
         name=body.name,
         code=body.code,
+        lat=body.lat,
+        lng=body.lng,
+    )
+    return CampusOut.model_validate(row)
+
+
+@router.patch(
+    "/{college_id}/campuses/{campus_id}",
+    response_model=CampusOut,
+)
+def patch_campus(
+    college_id: uuid.UUID,
+    campus_id: uuid.UUID,
+    body: CampusUpdate,
+    db: DbSession,
+    _admin: Annotated[User, Depends(require_college_admin_access)],
+) -> CampusOut:
+    fields_set = body.model_fields_set
+    set_coords = "lat" in fields_set or "lng" in fields_set
+    row = college_service.update_campus(
+        db,
+        college_id,
+        campus_id,
+        name=body.name,
+        lat=body.lat if set_coords else None,
+        lng=body.lng if set_coords else None,
+        set_coords=set_coords,
     )
     return CampusOut.model_validate(row)
 

@@ -10,11 +10,16 @@ from fastapi import APIRouter, Depends
 from app.api.deps import DbSession, require_college_admin_access
 from app.models.user import User
 from app.schemas.planning import (
+    ManualStopCreate,
+    MergeStopsIn,
     PlanningItemOut,
     PlanningRunCreate,
     PlanningRunOut,
+    ReorderRouteStopsIn,
+    ReviewItemAssign,
     RouteOut,
     RouteStopOut,
+    SplitStopIn,
     StopOut,
 )
 from app.services import planning as planning_service
@@ -115,4 +120,105 @@ def confirm_run(
     _admin: Annotated[User, Depends(require_college_admin_access)],
 ) -> PlanningRunOut:
     run = planning_service.confirm_planning_run(db, college_id, run_id)
+    return _serialize_run(run)
+
+
+@router.post(
+    "/{run_id}/items/{item_id}/assign-stop",
+    response_model=PlanningRunOut,
+)
+def assign_review_item(
+    college_id: uuid.UUID,
+    run_id: uuid.UUID,
+    item_id: uuid.UUID,
+    body: ReviewItemAssign,
+    db: DbSession,
+    _admin: Annotated[User, Depends(require_college_admin_access)],
+) -> PlanningRunOut:
+    run = planning_service.assign_review_item_to_stop(
+        db,
+        college_id,
+        run_id,
+        item_id,
+        stop_id=body.stop_id,
+        route_id=body.route_id,
+        bus_id=body.bus_id,
+    )
+    return _serialize_run(run)
+
+
+@router.post("/{run_id}/stops", response_model=PlanningRunOut, status_code=201)
+def create_manual_stop(
+    college_id: uuid.UUID,
+    run_id: uuid.UUID,
+    body: ManualStopCreate,
+    db: DbSession,
+    _admin: Annotated[User, Depends(require_college_admin_access)],
+) -> PlanningRunOut:
+    run = planning_service.create_manual_stop(
+        db,
+        college_id,
+        run_id,
+        name=body.name,
+        lat=body.lat,
+        lng=body.lng,
+        route_id=body.route_id,
+    )
+    return _serialize_run(run)
+
+
+@router.post("/{run_id}/stops/merge", response_model=PlanningRunOut)
+def merge_stops(
+    college_id: uuid.UUID,
+    run_id: uuid.UUID,
+    body: MergeStopsIn,
+    db: DbSession,
+    _admin: Annotated[User, Depends(require_college_admin_access)],
+) -> PlanningRunOut:
+    run = planning_service.merge_stops(
+        db,
+        college_id,
+        run_id,
+        keep_stop_id=body.keep_stop_id,
+        merge_stop_id=body.merge_stop_id,
+    )
+    return _serialize_run(run)
+
+
+@router.post("/{run_id}/stops/split", response_model=PlanningRunOut)
+def split_stop(
+    college_id: uuid.UUID,
+    run_id: uuid.UUID,
+    body: SplitStopIn,
+    db: DbSession,
+    _admin: Annotated[User, Depends(require_college_admin_access)],
+) -> PlanningRunOut:
+    run = planning_service.split_stop(
+        db,
+        college_id,
+        run_id,
+        stop_id=body.stop_id,
+        name=body.name,
+        lat=body.lat,
+        lng=body.lng,
+        student_ids=body.student_ids,
+    )
+    return _serialize_run(run)
+
+
+@router.put(
+    "/{run_id}/routes/{route_id}/stops",
+    response_model=PlanningRunOut,
+)
+def reorder_route_stops(
+    college_id: uuid.UUID,
+    run_id: uuid.UUID,
+    route_id: uuid.UUID,
+    body: ReorderRouteStopsIn,
+    db: DbSession,
+    _admin: Annotated[User, Depends(require_college_admin_access)],
+) -> PlanningRunOut:
+    run = planning_service.reorder_route_stops(
+        db, college_id, run_id, route_id, stop_ids=body.stop_ids
+    )
     return _serialize_run(run)

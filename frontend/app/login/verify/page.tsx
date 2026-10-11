@@ -34,7 +34,7 @@ function VerifyForm() {
         me.memberships.length === 0
       ) {
         setError(
-          "Signed in, but this email has no college role yet. A college admin must import the student (or assign driver/admin) before the portal opens.",
+          "You’re signed in, but this email isn’t set up for a college yet. Ask your college admin to add you as a student, driver, or admin.",
         );
         return;
       }
@@ -48,13 +48,13 @@ function VerifyForm() {
 
   return (
     <AuthShell
-      title="Enter OTP"
-      subtitle="In development, the code is printed in the API server log."
+      title="Enter your code"
+      subtitle="Check your email for the sign-in code we just sent. (In local testing, the code also appears in the server log.)"
     >
       <Stack spacing={2.5} component="form" onSubmit={onSubmit}>
         {error ? <Alert severity="error">{error}</Alert> : null}
         <TextField
-          label="Email"
+          label="Your email"
           type="email"
           required
           fullWidth
@@ -62,10 +62,12 @@ function VerifyForm() {
           onChange={(e) => setEmail(e.target.value)}
         />
         <TextField
-          label="One-time code"
+          label="Sign-in code"
           required
           fullWidth
           autoFocus
+          placeholder="6-digit code"
+          helperText="Usually a short number from the email"
           slotProps={{
             htmlInput: { inputMode: "numeric", pattern: "[0-9]*", maxLength: 12 },
           }}
@@ -73,7 +75,7 @@ function VerifyForm() {
           onChange={(e) => setCode(e.target.value)}
         />
         <Button type="submit" variant="contained" size="large" disabled={loading}>
-          {loading ? "Verifying…" : "Verify and continue"}
+          {loading ? "Checking…" : "Continue"}
         </Button>
         <Link href="/login" underline="hover" variant="body2" color="text.secondary">
           Use a different email
@@ -87,7 +89,7 @@ export default function VerifyOtpPage() {
   return (
     <Suspense
       fallback={
-        <AuthShell title="Enter OTP">
+        <AuthShell title="Enter your code">
           <Typography color="text.secondary">Loading…</Typography>
         </AuthShell>
       }

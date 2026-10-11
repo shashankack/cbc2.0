@@ -14,7 +14,7 @@ import { EmptyState, PageHeader, SectionCard, StatusChip } from "@/features/ui";
 import { apiGet, ApiError } from "@/lib/api";
 import { primaryCollegeId, resolveHomePath, useAuth } from "@/lib/auth";
 import { hasRole } from "@/lib/roles";
-import type { TripLocation } from "@/types/api";
+import type { Trip, TripLocation } from "@/types/api";
 
 const LiveTripMap = dynamic(() => import("@/features/maps/LiveTripMap"), {
   ssr: false,
@@ -26,8 +26,8 @@ const LiveTripMap = dynamic(() => import("@/features/maps/LiveTripMap"), {
 });
 
 const NAV = [
-  { href: "/student", label: "Assignment" },
-  { href: "/student/board", label: "Board" },
+  { href: "/student", label: "My ride" },
+  { href: "/student/board", label: "Get on the bus" },
   { href: "/student/trip", label: "Live map" },
 ];
 
@@ -58,8 +58,28 @@ export default function StudentTripPage() {
     }
     if (!hasRole(user, "student") && !user.is_platform_operator) {
       router.replace(resolveHomePath(user));
+      return;
     }
-  }, [loading, user, router]);
+    if (!collegeId) return;
+    void apiGet<Trip | null>(`/colleges/${collegeId}/me/active-trip`)
+      .then(async (trip) => {
+        if (!trip?.id) return;
+        setTripId(trip.id);
+        const stops = await apiGet<ItineraryStop[]>(
+          `/colleges/${collegeId}/trips/${trip.id}/itinerary`,
+        );
+        setItinerary(stops);
+        setActiveTripId(trip.id);
+        setWatching(true);
+        const loc = await apiGet<TripLocation>(
+          `/colleges/${collegeId}/trips/${trip.id}/location`,
+        );
+        setLocation(loc);
+      })
+      .catch(() => {
+        /* no active trip yet */
+      });
+  }, [loading, user, router, collegeId]);
 
   useEffect(() => {
     if (!collegeId || !activeTripId || !watching) return;
@@ -129,10 +149,10 @@ export default function StudentTripPage() {
       : null;
 
   return (
-    <PortalShell title="Student" description="Live bus position" nav={NAV}>
+    <PortalShell title="Student" description="See your bus on the map" nav={NAV}>
       <PageHeader
-        title="Live bus map"
-        description="Enter the active trip ID from your driver. Position updates while the session is active."
+        title="Where is my bus?"
+        description="When your driver has started today’s trip, the bus appears here and updates as it moves. Usually this opens automatically for your ride."
         actions={location ? <StatusChip status={location.status} /> : null}
       />
       {error ? (
@@ -142,7 +162,7 @@ export default function StudentTripPage() {
       ) : null}
 
       <Stack spacing={3}>
-        <SectionCard title="Track trip">
+        <SectionCard title="Follow a trip">
           <Stack
             component="form"
             spacing={2}
@@ -150,34 +170,35 @@ export default function StudentTripPage() {
             sx={{ maxWidth: 480 }}
           >
             <TextField
-              label="Trip ID"
+              label="Trip reference"
               value={tripId}
               onChange={(e) => setTripId(e.target.value)}
+              helperText="Filled for you when your bus trip is running"
               fullWidth
             />
             <Button type="submit" variant="contained" sx={{ alignSelf: "flex-start" }}>
-              {watching ? "Refresh itinerary" : "Start watching"}
+              {watching ? "Refresh map" : "Show on map"}
             </Button>
           </Stack>
         </SectionCard>
 
         {!watching ? (
           <EmptyState
-            title="No trip selected"
-            description="Use the trip ID shown when your driver starts the session."
+            title="No trip to show yet"
+            description="Ask your driver to start the trip, or wait until your bus is on the road."
           />
         ) : (
           <SectionCard
             title="Route and bus"
             description={
               location?.recorded_at
-                ? `Last ping ${new Date(location.recorded_at).toLocaleString()}`
-                : "Waiting for the first driver GPS ping."
+                ? `Last update ${new Date(location.recorded_at).toLocaleString()}`
+                : "Waiting for the driver’s first location update."
             }
           >
             {!itinerary.length && !busPoint ? (
               <Typography color="text.secondary">
-                No stop or bus coordinates yet.
+                Pickup stops and bus location will appear here once the trip is live.
               </Typography>
             ) : (
               <LiveTripMap

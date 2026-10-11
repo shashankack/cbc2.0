@@ -40,27 +40,27 @@ const STATUS_COPY: Record<
 > = {
   idle: {
     severity: "info",
-    fallback: "Point your camera at the driver’s trip QR when the session is active.",
+    fallback: "Point your camera at the QR code on the driver’s phone while the trip is running.",
   },
   scanning: {
     severity: "info",
-    fallback: "Scanning…",
+    fallback: "Reading the code…",
   },
   success: {
     severity: "success",
-    fallback: "Boarding recorded. You can close this screen.",
+    fallback: "You’re checked in. You can close this screen.",
   },
   duplicate: {
     severity: "warning",
-    fallback: "This boarding was already recorded for this trip.",
+    fallback: "You’re already checked in for this trip.",
   },
   error: {
     severity: "error",
-    fallback: "Scan failed. Try again or ask the driver to refresh the QR.",
+    fallback: "That didn’t work. Try again or ask the driver to refresh their QR.",
   },
   expired: {
     severity: "error",
-    fallback: "This trip session has ended. Further scans are not accepted.",
+    fallback: "This trip has ended, so boarding codes no longer work.",
   },
 };
 
@@ -76,7 +76,7 @@ export function BoardingScanPanel({
   return (
     <Paper variant="outlined" sx={{ p: 2 }}>
       <Stack spacing={2}>
-        <Typography variant="subtitle1">Scan boarding QR</Typography>
+        <Typography variant="subtitle1">Camera check-in</Typography>
         <Box
           sx={{
             position: "relative",
@@ -90,11 +90,11 @@ export function BoardingScanPanel({
             alignItems: "center",
             justifyContent: "center",
           }}
-          aria-label="QR scanner viewport"
+          aria-label="Camera view for scanning the boarding QR"
         >
           {viewport ?? (
             <Typography variant="body2" sx={{ color: "grey.400", px: 2, textAlign: "center" }}>
-              Scanner viewport (owner injects camera via `viewport` prop)
+              Camera preview appears here when scanning is available
             </Typography>
           )}
           {status === "scanning" ? (

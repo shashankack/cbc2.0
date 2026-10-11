@@ -29,7 +29,15 @@ from app.models.planning import (
     Stop,
 )
 from app.models.student import Student, StudentImportBatch
-from app.services.geo import Point, centroid, dbscan, nearest_neighbor_order
+from app.services.geocode import reverse_place_name
+from app.services.geo import (
+    Point,
+    centroid,
+    dbscan,
+    nearest_neighbor_order,
+    split_ordered_by_gap,
+    two_opt_order,
+)
 
 
 def _campus_settings(
@@ -63,6 +71,13 @@ def run_planning(
     )
     if campus is None:
         raise AppError("NOT_FOUND", "Campus not found.", status_code=404)
+    if campus.lat is None or campus.lng is None:
+        raise AppError(
+            "CONFLICT",
+            "Campus coordinates are required before planning. "
+            "Set lat/lng on the campus so routes can start and end at campus.",
+            status_code=409,
+        )
     settings = _campus_settings(db, college_id, campus_id)
 
     if import_batch_id is not None:
@@ -146,13 +161,19 @@ def run_planning(
     stop_for_cluster: dict[int, Stop] = {}
     members_by_stop: dict[uuid.UUID, list[uuid.UUID]] = {}
 
+    used_names: set[str] = set()
     for cid, members in clusters.items():
         lat, lng = centroid(members)
+        place = reverse_place_name(lat, lng)
+        name = place
+        if name in used_names:
+            name = f"{place} ({cid + 1})"
+        used_names.add(name)
         stop = Stop(
             college_id=college_id,
             campus_id=campus_id,
             planning_run_id=run.id,
-            name=f"Cluster {cid + 1}",
+            name=name,
             lat=lat,
             lng=lng,
             source=StopSource.CLUSTER,
@@ -221,92 +242,186 @@ def run_planning(
 
     db.flush()
 
-    # Build routes: each stop with enough students becomes a route (or merge small ones later)
+    # Depot stop: every route starts and ends at campus.
+    campus_stop = Stop(
+        college_id=college_id,
+        campus_id=campus_id,
+        planning_run_id=run.id,
+        name=f"{campus.name} (campus)",
+        lat=float(campus.lat),
+        lng=float(campus.lng),
+        source=StopSource.CAMPUS,
+    )
+    db.add(campus_stop)
+    db.flush()
+
+    # Pipeline:
+    # 1) Student homes → density clusters → centroid pickup stops (above)
+    # 2) Group closest centroids into geographic chains (= candidate routes)
+    # 3) Optimize visit order, pack each chain onto buses by capacity
+    # 4) Bookend campus depot on every route
+    stop_by_id = {s.id: s for s in stop_for_cluster.values()}
     stop_points = [
         Point(id=s.id, lat=s.lat, lng=s.lng) for s in stop_for_cluster.values()
     ]
-    ordered_stops = nearest_neighbor_order(stop_points)
+    depot = Point(id=campus_stop.id, lat=float(campus.lat), lng=float(campus.lng))
+    ordered_stops = nearest_neighbor_order(stop_points, depot=depot)
+    # Link nearby centroids into the same corridor/route family.
+    route_link_eps_m = max(float(settings.cluster_eps_m) * 3.0, 1200.0)
+    geo_chains = split_ordered_by_gap(ordered_stops, max_gap_m=route_link_eps_m)
+    geo_chains = [two_opt_order(chain, depot=depot) for chain in geo_chains]
 
-    # Partition ordered stops into routes by min_students_per_route capacity packing
-    # Simple policy: one route per stop if headcount >= min; else leave students on review already handled
     bus_iter = list(buses)
     bus_idx = 0
+    route_num = 0
 
-    for seq_base, sp in enumerate(ordered_stops):
-        stop_id = sp.id  # type: ignore[assignment]
-        member_ids = members_by_stop.get(stop_id, [])
-        if len(member_ids) < settings.min_students_per_route:
-            # Mark those items as needs review if too small for a route
-            items = db.scalars(
+    def _mark_students_for_review(student_ids: list[uuid.UUID]) -> None:
+        for sid in student_ids:
+            item = db.scalar(
                 select(PlanningRunItem).where(
                     PlanningRunItem.planning_run_id == run.id,
-                    PlanningRunItem.stop_id == stop_id,
+                    PlanningRunItem.student_id == sid,
                 )
-            ).all()
-            for item in items:
-                if item.status != PlanningItemStatus.NEEDS_ADMIN_REVIEW:
-                    item.status = PlanningItemStatus.NEEDS_ADMIN_REVIEW
-                    student_by_id[item.student_id].status = StudentStatus.NEEDS_ADMIN_REVIEW
-            continue
-
-        if bus_idx >= len(bus_iter):
-            raise AppError(
-                "CONFLICT",
-                "Not enough available buses for proposed routes.",
-                status_code=409,
             )
+            if item is None:
+                continue
+            if item.status != PlanningItemStatus.NEEDS_ADMIN_REVIEW:
+                item.status = PlanningItemStatus.NEEDS_ADMIN_REVIEW
+                student_by_id[sid].status = StudentStatus.NEEDS_ADMIN_REVIEW
 
-        # May need multiple buses if headcount > capacity
-        remaining = member_ids[:]
-        route_num = 1
-        while remaining:
-            if bus_idx >= len(bus_iter):
-                raise AppError(
-                    "CONFLICT",
-                    "Not enough available buses for proposed routes.",
-                    status_code=409,
+    def _bind_students(
+        *,
+        route: Route,
+        bus: Bus,
+        student_ids: list[uuid.UUID],
+    ) -> None:
+        for sid in student_ids:
+            item = db.scalar(
+                select(PlanningRunItem).where(
+                    PlanningRunItem.planning_run_id == run.id,
+                    PlanningRunItem.student_id == sid,
                 )
-            bus = bus_iter[bus_idx]
-            bus_idx += 1
-            chunk = remaining[: bus.capacity]
-            remaining = remaining[bus.capacity :]
+            )
+            if item is None:
+                continue
+            item.route_id = route.id
+            item.bus_id = bus.id
+            if item.status != PlanningItemStatus.NEEDS_ADMIN_REVIEW:
+                item.status = (
+                    PlanningItemStatus.SNAPPED
+                    if item.status == PlanningItemStatus.SNAPPED
+                    else PlanningItemStatus.PROPOSED
+                )
+                student_by_id[sid].status = StudentStatus.ALLOCATED
 
-            route = Route(
+    def _route_label(packed_stop_ids: list[uuid.UUID]) -> str:
+        names = [
+            stop_by_id[sid].name
+            for sid in packed_stop_ids
+            if sid in stop_by_id
+        ]
+        if not names:
+            return f"Route {route_num}"
+        if len(names) == 1:
+            return f"Route · {names[0]}"
+        return f"Route · {names[0]} → {names[-1]}"
+
+    def _emit_route(
+        packed: list[tuple[uuid.UUID, list[uuid.UUID]]],
+        bus: Bus,
+    ) -> None:
+        nonlocal route_num
+        headcount = sum(len(m) for _, m in packed)
+        if headcount < settings.min_students_per_route:
+            _mark_students_for_review([sid for _, m in packed for sid in m])
+            return
+        route_num += 1
+        route = Route(
+            college_id=college_id,
+            campus_id=campus_id,
+            planning_run_id=run.id,
+            name=_route_label([sid for sid, _ in packed]),
+            status=RouteStatus.DRAFT,
+        )
+        db.add(route)
+        db.flush()
+        db.add(
+            RouteStop(
                 college_id=college_id,
-                campus_id=campus_id,
-                planning_run_id=run.id,
-                name=f"Route {seq_base + 1}-{route_num}",
-                status=RouteStatus.DRAFT,
+                route_id=route.id,
+                stop_id=campus_stop.id,
+                sequence=1,
             )
-            db.add(route)
-            db.flush()
+        )
+        for seq, (packed_stop_id, packed_members) in enumerate(packed, start=2):
             db.add(
                 RouteStop(
                     college_id=college_id,
                     route_id=route.id,
-                    stop_id=stop_id,
-                    sequence=1,
+                    stop_id=packed_stop_id,
+                    sequence=seq,
                 )
             )
-            for sid in chunk:
-                item = db.scalar(
-                    select(PlanningRunItem).where(
-                        PlanningRunItem.planning_run_id == run.id,
-                        PlanningRunItem.student_id == sid,
-                    )
-                )
-                if item is None:
+            _bind_students(route=route, bus=bus, student_ids=packed_members)
+        db.add(
+            RouteStop(
+                college_id=college_id,
+                route_id=route.id,
+                stop_id=campus_stop.id,
+                sequence=len(packed) + 2,
+            )
+        )
+
+    for chain in geo_chains:
+        stop_i = 0
+        while stop_i < len(chain):
+            stop_id = chain[stop_i].id  # type: ignore[assignment]
+            members = members_by_stop.get(stop_id, [])
+            if not members:
+                stop_i += 1
+                continue
+
+            if bus_idx >= len(bus_iter):
+                leftover: list[uuid.UUID] = []
+                for sp in chain[stop_i:]:
+                    leftover.extend(members_by_stop.get(sp.id, []))  # type: ignore[arg-type]
+                _mark_students_for_review(leftover)
+                break
+
+            bus = bus_iter[bus_idx]
+            bus_idx += 1
+            packed: list[tuple[uuid.UUID, list[uuid.UUID]]] = []
+            headcount = 0
+
+            while stop_i < len(chain):
+                sid = chain[stop_i].id  # type: ignore[assignment]
+                stop_members = members_by_stop.get(sid, [])
+                n = len(stop_members)
+                if n == 0:
+                    stop_i += 1
                     continue
-                item.route_id = route.id
-                item.bus_id = bus.id
-                if item.status != PlanningItemStatus.NEEDS_ADMIN_REVIEW:
-                    item.status = (
-                        PlanningItemStatus.SNAPPED
-                        if item.status == PlanningItemStatus.SNAPPED
-                        else PlanningItemStatus.PROPOSED
-                    )
-                    student_by_id[sid].status = StudentStatus.ALLOCATED
-            route_num += 1
+
+                if not packed and n > bus.capacity:
+                    chunk = stop_members[: bus.capacity]
+                    rest = stop_members[bus.capacity :]
+                    members_by_stop[sid] = rest
+                    packed.append((sid, chunk))
+                    headcount = len(chunk)
+                    break
+
+                if headcount + n > bus.capacity:
+                    break
+
+                packed.append((sid, stop_members))
+                headcount += n
+                stop_i += 1
+
+            if not packed:
+                _mark_students_for_review(members)
+                stop_i += 1
+                continue
+
+            _emit_route(packed, bus)
 
     run.status = PlanningRunStatus.PROPOSED
     db.commit()
@@ -339,6 +454,321 @@ def list_planning_runs(db: Session, college_id: uuid.UUID) -> list[PlanningRun]:
             .order_by(PlanningRun.created_at.desc())
         ).all()
     )
+
+
+def _require_proposed_run(
+    db: Session, college_id: uuid.UUID, run_id: uuid.UUID
+) -> PlanningRun:
+    run = get_planning_run(db, college_id, run_id)
+    if run.status != PlanningRunStatus.PROPOSED:
+        raise AppError(
+            "CONFLICT",
+            "Only proposed planning runs can be edited.",
+            status_code=409,
+        )
+    return run
+
+
+def create_manual_stop(
+    db: Session,
+    college_id: uuid.UUID,
+    run_id: uuid.UUID,
+    *,
+    name: str,
+    lat: float,
+    lng: float,
+    route_id: uuid.UUID | None = None,
+) -> PlanningRun:
+    run = _require_proposed_run(db, college_id, run_id)
+    cleaned = name.strip()
+    if not cleaned:
+        raise AppError("VALIDATION_ERROR", "Stop name is required.", status_code=422)
+    stop = Stop(
+        college_id=college_id,
+        campus_id=run.campus_id,
+        planning_run_id=run.id,
+        name=cleaned,
+        lat=lat,
+        lng=lng,
+        source=StopSource.MANUAL,
+    )
+    db.add(stop)
+    db.flush()
+
+    if route_id is not None:
+        route = db.scalar(
+            select(Route).where(
+                Route.id == route_id,
+                Route.planning_run_id == run.id,
+                Route.college_id == college_id,
+            )
+        )
+        if route is None:
+            raise AppError("NOT_FOUND", "Route not found on this planning run.", status_code=404)
+        pickups = [
+            rs.stop_id
+            for rs in sorted(route.route_stops, key=lambda r: r.sequence)
+            if rs.stop.source != StopSource.CAMPUS
+        ]
+        pickups.append(stop.id)
+        _rewrite_route_stops(db, college_id, route, pickups)
+
+    db.commit()
+    return get_planning_run(db, college_id, run.id)
+
+
+def merge_stops(
+    db: Session,
+    college_id: uuid.UUID,
+    run_id: uuid.UUID,
+    *,
+    keep_stop_id: uuid.UUID,
+    merge_stop_id: uuid.UUID,
+) -> PlanningRun:
+    run = _require_proposed_run(db, college_id, run_id)
+    if keep_stop_id == merge_stop_id:
+        raise AppError("VALIDATION_ERROR", "Cannot merge a stop into itself.", status_code=422)
+    keep = db.get(Stop, keep_stop_id)
+    drop = db.get(Stop, merge_stop_id)
+    if (
+        keep is None
+        or drop is None
+        or keep.planning_run_id != run.id
+        or drop.planning_run_id != run.id
+        or keep.source == StopSource.CAMPUS
+        or drop.source == StopSource.CAMPUS
+    ):
+        raise AppError("NOT_FOUND", "Both stops must be non-campus stops on this run.", status_code=404)
+
+    for item in run.items:
+        if item.stop_id == merge_stop_id:
+            item.stop_id = keep_stop_id
+
+    # Remove drop from all routes; keep sequence contiguous for pickups.
+    for route in run.routes:
+        had_merge = any(rs.stop_id == merge_stop_id for rs in route.route_stops)
+        pickup_ids: list[uuid.UUID] = []
+        for rs in sorted(route.route_stops, key=lambda r: r.sequence):
+            if rs.stop.source == StopSource.CAMPUS:
+                continue
+            if rs.stop_id == merge_stop_id:
+                continue
+            if rs.stop_id not in pickup_ids:
+                pickup_ids.append(rs.stop_id)
+        if had_merge and keep_stop_id not in pickup_ids:
+            pickup_ids.append(keep_stop_id)
+        if pickup_ids:
+            _rewrite_route_stops(db, college_id, route, pickup_ids)
+
+    db.delete(drop)
+    db.commit()
+    return get_planning_run(db, college_id, run.id)
+
+
+def split_stop(
+    db: Session,
+    college_id: uuid.UUID,
+    run_id: uuid.UUID,
+    *,
+    stop_id: uuid.UUID,
+    name: str,
+    lat: float,
+    lng: float,
+    student_ids: list[uuid.UUID],
+) -> PlanningRun:
+    run = _require_proposed_run(db, college_id, run_id)
+    source = db.get(Stop, stop_id)
+    if (
+        source is None
+        or source.planning_run_id != run.id
+        or source.source == StopSource.CAMPUS
+    ):
+        raise AppError("NOT_FOUND", "Stop not found on this planning run.", status_code=404)
+    if not student_ids:
+        raise AppError("VALIDATION_ERROR", "Select at least one student to split.", status_code=422)
+
+    new_stop = Stop(
+        college_id=college_id,
+        campus_id=run.campus_id,
+        planning_run_id=run.id,
+        name=name.strip() or "Split stop",
+        lat=lat,
+        lng=lng,
+        source=StopSource.MANUAL,
+    )
+    db.add(new_stop)
+    db.flush()
+
+    moved = 0
+    for item in run.items:
+        if item.stop_id == stop_id and item.student_id in set(student_ids):
+            item.stop_id = new_stop.id
+            moved += 1
+    if moved == 0:
+        raise AppError(
+            "VALIDATION_ERROR",
+            "No matching students on that stop to split.",
+            status_code=422,
+        )
+
+    # Insert new stop after source on any route that contains source.
+    for route in run.routes:
+        ordered = sorted(route.route_stops, key=lambda r: r.sequence)
+        pickups = [rs.stop_id for rs in ordered if rs.stop.source != StopSource.CAMPUS]
+        if stop_id not in pickups:
+            continue
+        idx = pickups.index(stop_id)
+        pickups.insert(idx + 1, new_stop.id)
+        _rewrite_route_stops(db, college_id, route, pickups)
+
+    db.commit()
+    return get_planning_run(db, college_id, run.id)
+
+
+def reorder_route_stops(
+    db: Session,
+    college_id: uuid.UUID,
+    run_id: uuid.UUID,
+    route_id: uuid.UUID,
+    *,
+    stop_ids: list[uuid.UUID],
+) -> PlanningRun:
+    run = _require_proposed_run(db, college_id, run_id)
+    route = db.scalar(
+        select(Route).where(
+            Route.id == route_id,
+            Route.planning_run_id == run.id,
+            Route.college_id == college_id,
+        )
+    )
+    if route is None:
+        raise AppError("NOT_FOUND", "Route not found.", status_code=404)
+    # Filter campus IDs from client payload if any.
+    campus_stop_ids = {
+        rs.stop_id for rs in route.route_stops if rs.stop.source == StopSource.CAMPUS
+    }
+    pickups = [sid for sid in stop_ids if sid not in campus_stop_ids]
+    if not pickups:
+        raise AppError("VALIDATION_ERROR", "Route needs at least one pickup stop.", status_code=422)
+    valid_ids = {
+        s.id
+        for s in run.stops
+        if s.source != StopSource.CAMPUS
+    }
+    missing = [sid for sid in pickups if sid not in valid_ids]
+    if missing:
+        raise AppError(
+            "VALIDATION_ERROR",
+            "One or more stop_ids are not pickups on this planning run.",
+            status_code=422,
+        )
+    _rewrite_route_stops(db, college_id, route, pickups)
+    db.commit()
+    return get_planning_run(db, college_id, run.id)
+
+
+def _rewrite_route_stops(
+    db: Session,
+    college_id: uuid.UUID,
+    route: Route,
+    pickup_stop_ids: list[uuid.UUID],
+) -> None:
+    campus_rs = next(
+        (rs for rs in route.route_stops if rs.stop.source == StopSource.CAMPUS),
+        None,
+    )
+    if campus_rs is None:
+        raise AppError("CONFLICT", "Route missing campus depot stop.", status_code=409)
+    campus_stop_id = campus_rs.stop_id
+    for rs in list(route.route_stops):
+        db.delete(rs)
+    db.flush()
+    seq = 1
+    db.add(
+        RouteStop(
+            college_id=college_id,
+            route_id=route.id,
+            stop_id=campus_stop_id,
+            sequence=seq,
+        )
+    )
+    seq += 1
+    for sid in pickup_stop_ids:
+        db.add(
+            RouteStop(
+                college_id=college_id,
+                route_id=route.id,
+                stop_id=sid,
+                sequence=seq,
+            )
+        )
+        seq += 1
+    db.add(
+        RouteStop(
+            college_id=college_id,
+            route_id=route.id,
+            stop_id=campus_stop_id,
+            sequence=seq,
+        )
+    )
+    db.flush()
+
+
+def assign_review_item_to_stop(
+    db: Session,
+    college_id: uuid.UUID,
+    run_id: uuid.UUID,
+    item_id: uuid.UUID,
+    *,
+    stop_id: uuid.UUID,
+    route_id: uuid.UUID | None = None,
+    bus_id: uuid.UUID | None = None,
+) -> PlanningRun:
+    """Admin resolves needs_admin_review by snapping a student onto a stop (+ optional route/bus)."""
+    run = _require_proposed_run(db, college_id, run_id)
+    item = db.scalar(
+        select(PlanningRunItem).where(
+            PlanningRunItem.id == item_id,
+            PlanningRunItem.planning_run_id == run.id,
+            PlanningRunItem.college_id == college_id,
+        )
+    )
+    if item is None:
+        raise AppError("NOT_FOUND", "Planning item not found.", status_code=404)
+    stop = db.scalar(
+        select(Stop).where(
+            Stop.id == stop_id,
+            Stop.college_id == college_id,
+            Stop.planning_run_id == run.id,
+        )
+    )
+    if stop is None:
+        raise AppError("NOT_FOUND", "Stop not found on this planning run.", status_code=404)
+
+    item.stop_id = stop_id
+    if route_id is not None:
+        route = db.scalar(
+            select(Route).where(
+                Route.id == route_id,
+                Route.planning_run_id == run.id,
+                Route.college_id == college_id,
+            )
+        )
+        if route is None:
+            raise AppError("NOT_FOUND", "Route not found on this planning run.", status_code=404)
+        item.route_id = route_id
+    if bus_id is not None:
+        bus = db.get(Bus, bus_id)
+        if bus is None or bus.college_id != college_id:
+            raise AppError("NOT_FOUND", "Bus not found.", status_code=404)
+        item.bus_id = bus_id
+
+    item.status = PlanningItemStatus.SNAPPED
+    student = db.get(Student, item.student_id)
+    if student is not None:
+        student.status = StudentStatus.ALLOCATED
+    db.commit()
+    return get_planning_run(db, college_id, run.id)
 
 
 def confirm_planning_run(
@@ -423,5 +853,19 @@ def confirm_planning_run(
 
     run.status = PlanningRunStatus.CONFIRMED
     run.confirmed_at = utcnow()
+
+    # Auto-schedule today's trips for each confirmed route/bus/driver pairing.
+    from app.services import trips as trip_service
+
+    trip_service.schedule_trips_for_assignments(
+        db,
+        college_id,
+        [
+            (item.route_id, item.bus_id)  # type: ignore[arg-type]
+            for item in confirmable
+            if item.route_id and item.bus_id
+        ],
+    )
+
     db.commit()
     return get_planning_run(db, college_id, run.id)

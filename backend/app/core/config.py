@@ -18,7 +18,8 @@ class Settings(BaseSettings):
     session_cookie_name: str = "cbc_session"
     session_ttl_seconds: int = 604800
     bootstrap_operator_email: str = "operator@example.com"
-    dns_verify_enabled: bool = False
+    # None = auto: enabled in production, disabled in development.
+    dns_verify_enabled: bool | None = None
     smtp_host: str = ""
     smtp_port: int = 587
     smtp_user: str = ""

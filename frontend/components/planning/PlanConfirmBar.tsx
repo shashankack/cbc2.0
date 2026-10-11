@@ -75,9 +75,10 @@ export function PlanConfirmBar({
         sx={{ alignItems: { sm: "center" }, justifyContent: "space-between" }}
       >
         <Box>
-          <Typography variant="subtitle1">Review planning proposal</Typography>
+          <Typography variant="subtitle1">Ready to lock this plan?</Typography>
           <Typography variant="body2" color="text.secondary">
-            {summary || "Counts are passed in via props."} Confirming locks student pick/drop.
+            {summary || "Review the routes above."} Confirming locks each student’s
+            pickup and bus until the next planning cycle.
           </Typography>
         </Box>
         <Stack direction="row" spacing={1}>
@@ -88,7 +89,7 @@ export function PlanConfirmBar({
             onClick={onReject}
             disabled={disabled || loading}
           >
-            Reject
+            Discard draft
           </Button>
           <Button
             variant="contained"
@@ -97,7 +98,7 @@ export function PlanConfirmBar({
             onClick={onConfirm}
             disabled={disabled || loading}
           >
-            Confirm plan
+            Lock in routes
           </Button>
         </Stack>
       </Stack>

@@ -48,3 +48,13 @@ export function distressIcon(color = "#D32F2F"): L.DivIcon {
     popupAnchor: [0, -16],
   });
 }
+
+export function depotIcon(color = "#0B3D91"): L.DivIcon {
+  return L.divIcon({
+    className: "cbc-map-divicon",
+    html: circleHtml(color, "C", 32),
+    iconSize: [32, 32],
+    iconAnchor: [16, 16],
+    popupAnchor: [0, -16],
+  });
+}

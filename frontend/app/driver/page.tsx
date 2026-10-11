@@ -4,16 +4,8 @@ import { useCallback, useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import Alert from "@mui/material/Alert";
-import Button from "@mui/material/Button";
 import CircularProgress from "@mui/material/CircularProgress";
 import Stack from "@mui/material/Stack";
-import Table from "@mui/material/Table";
-import TableBody from "@mui/material/TableBody";
-import TableCell from "@mui/material/TableCell";
-import TableContainer from "@mui/material/TableContainer";
-import TableHead from "@mui/material/TableHead";
-import TableRow from "@mui/material/TableRow";
-import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 import {
   DistressButton,
@@ -23,10 +15,12 @@ import {
 } from "@/components/trips";
 import PortalShell from "@/features/shell/PortalShell";
 import { EmptyState, PageHeader, SectionCard, StatusChip } from "@/features/ui";
+import { boardingQrImageUrl, encodeBoardingQr } from "@/features/trips/boardingQr";
+import { haversineMeters } from "@/features/maps";
 import { apiGet, apiPost, ApiError } from "@/lib/api";
 import { primaryCollegeId, resolveHomePath, useAuth } from "@/lib/auth";
 import { hasRole } from "@/lib/roles";
-import type { Trip } from "@/types/api";
+import type { DriverDuty, Trip } from "@/types/api";
 
 const TripItineraryMap = dynamic(
   () => import("@/features/maps/TripItineraryMap"),
@@ -48,13 +42,16 @@ type ItineraryStop = {
   lng: number;
 };
 
+function formatTime(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleString();
+}
+
 export default function DriverPage() {
   const router = useRouter();
   const { user, loading } = useAuth();
   const collegeId = user ? primaryCollegeId(user) : null;
-  const [routeId, setRouteId] = useState("");
-  const [busId, setBusId] = useState("");
-  const [scheduled, setScheduled] = useState<Trip[]>([]);
+  const [duty, setDuty] = useState<DriverDuty | null>(null);
   const [trip, setTrip] = useState<Trip | null>(null);
   const [qrToken, setQrToken] = useState<string | null>(null);
   const [itinerary, setItinerary] = useState<ItineraryStop[]>([]);
@@ -63,16 +60,28 @@ export default function DriverPage() {
   const [sessionStatus, setSessionStatus] = useState<
     "scheduled" | "active" | "ended" | "loading" | "error"
   >("scheduled");
+  const [busy, setBusy] = useState(false);
 
-  const loadScheduled = useCallback(async () => {
+  const loadDuty = useCallback(async () => {
     if (!collegeId) return;
     try {
-      const rows = await apiGet<Trip[]>(
-        `/colleges/${collegeId}/trips?status=scheduled`,
+      const row = await apiGet<DriverDuty>(
+        `/colleges/${collegeId}/me/driver-duty`,
       );
-      setScheduled(rows);
+      setDuty(row);
+      setTrip(row.trip);
+      if (row.trip?.status === "active") {
+        setSessionStatus("active");
+      } else if (row.trip?.status === "ended") {
+        setSessionStatus("ended");
+      } else {
+        setSessionStatus("scheduled");
+      }
+      setError(null);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Could not load trips.");
+      setDuty(null);
+      setTrip(null);
+      setError(err instanceof ApiError ? err.message : "Could not load duty.");
     }
   }, [collegeId]);
 
@@ -86,83 +95,117 @@ export default function DriverPage() {
       router.replace(resolveHomePath(user));
       return;
     }
-    void loadScheduled();
-  }, [loading, user, router, loadScheduled]);
+    void loadDuty();
+  }, [loading, user, router, loadDuty]);
 
-  async function createTrip() {
-    if (!collegeId) return;
-    try {
-      const created = await apiPost<Trip>(`/colleges/${collegeId}/trips`, {
-        route_id: routeId,
-        bus_id: busId,
+  // Continuous GPS while trip is active.
+  useEffect(() => {
+    if (!collegeId || !trip || trip.status !== "active") return;
+    if (typeof navigator === "undefined" || !navigator.geolocation) return;
+
+    const send = (lat: number, lng: number) => {
+      void apiPost(`/colleges/${collegeId}/trips/${trip.id}/location`, {
+        lat,
+        lng,
+      }).catch(() => {
+        /* ignore transient GPS post failures */
       });
-      setTrip(created);
-      setSessionStatus("scheduled");
-      setError(null);
-      await loadScheduled();
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Create trip failed.");
-      setSessionStatus("error");
-    }
-  }
+    };
 
-  function selectTrip(row: Trip) {
-    setTrip(row);
-    setSessionStatus(
-      row.status === "active"
-        ? "active"
-        : row.status === "ended"
-          ? "ended"
-          : "scheduled",
+    const watchId = navigator.geolocation.watchPosition(
+      (pos) => send(pos.coords.latitude, pos.coords.longitude),
+      () => {
+        /* permission denied / unavailable */
+      },
+      { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 },
     );
-    setQrToken(null);
-    setItinerary([]);
-    setError(null);
-    setDistressInfo(null);
-  }
+    const interval = window.setInterval(() => {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => send(pos.coords.latitude, pos.coords.longitude),
+        () => undefined,
+        { maximumAge: 10000, timeout: 10000 },
+      );
+    }, 12000);
+
+    return () => {
+      navigator.geolocation.clearWatch(watchId);
+      window.clearInterval(interval);
+    };
+  }, [collegeId, trip]);
+
+  // If already active after refresh, restore QR + itinerary.
+  useEffect(() => {
+    if (!collegeId || !trip || trip.status !== "active" || qrToken) return;
+    void apiPost<{
+      trip: Trip;
+      qr_token: string;
+      itinerary: ItineraryStop[];
+    }>(`/colleges/${collegeId}/me/driver-duty/start`)
+      .then((result) => {
+        setTrip(result.trip);
+        setQrToken(result.qr_token);
+        setItinerary(result.itinerary);
+        setSessionStatus("active");
+      })
+      .catch(() => {
+        /* keep duty loaded; driver can retry Start */
+      });
+  }, [collegeId, trip, qrToken]);
 
   async function start() {
-    if (!collegeId || !trip) return;
+    if (!collegeId) return;
+    setBusy(true);
     setSessionStatus("loading");
     try {
       const result = await apiPost<{
         trip: Trip;
         qr_token: string;
         itinerary: ItineraryStop[];
-      }>(`/colleges/${collegeId}/trips/${trip.id}/start`);
+      }>(`/colleges/${collegeId}/me/driver-duty/start`);
       setTrip(result.trip);
       setQrToken(result.qr_token);
       setItinerary(result.itinerary);
       setSessionStatus("active");
       setError(null);
-      await loadScheduled();
+      setDistressInfo(null);
+      await loadDuty();
       if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition((pos) => {
-          void apiPost(`/colleges/${collegeId}/trips/${trip.id}/location`, {
-            lat: pos.coords.latitude,
-            lng: pos.coords.longitude,
-          });
+          void apiPost(
+            `/colleges/${collegeId}/trips/${result.trip.id}/location`,
+            {
+              lat: pos.coords.latitude,
+              lng: pos.coords.longitude,
+            },
+          );
         });
       }
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Start failed.");
       setSessionStatus("error");
+    } finally {
+      setBusy(false);
     }
   }
 
   async function end() {
-    if (!collegeId || !trip) return;
+    if (!collegeId) return;
+    setBusy(true);
     setSessionStatus("loading");
     try {
       const ended = await apiPost<Trip>(
-        `/colleges/${collegeId}/trips/${trip.id}/end`,
+        `/colleges/${collegeId}/me/driver-duty/end`,
       );
       setTrip(ended);
       setQrToken(null);
       setSessionStatus("ended");
+      setError(null);
+      await loadDuty();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "End failed.");
       setSessionStatus("error");
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -173,7 +216,7 @@ export default function DriverPage() {
         emergency_reallocation: { id: string };
       }>(`/colleges/${collegeId}/trips/${trip.id}/distress`, { lat, lng });
       setDistressInfo(
-        `Emergency plan ${result.emergency_reallocation.id} — give this ID to college admin to confirm.`,
+        `Emergency plan ${result.emergency_reallocation.id.slice(0, 8)}… — college admin must confirm.`,
       );
     };
     if (navigator.geolocation) {
@@ -197,16 +240,18 @@ export default function DriverPage() {
   if (loading || !user) return null;
 
   return (
-    <PortalShell title="Driver" description="Trip session controls" nav={[{ href: "/driver", label: "Trip" }]}>
+    <PortalShell
+      title="Driver"
+      description="Start and end today’s trip"
+      nav={[{ href: "/driver", label: "Today’s trip" }]}
+    >
       <PageHeader
-        title="Trip session"
-        description="Pick a scheduled trip to start, or create one from a confirmed route and your bus."
+        title="Today’s trip"
+        description="Your bus and route are already assigned. Start when you’re ready, show students the boarding QR, and end the trip when you’re done. Times are saved for the college admin."
         actions={
-          trip ? (
-            <StatusChip
-              status={sessionStatus === "loading" ? "processing" : sessionStatus}
-            />
-          ) : null
+          <StatusChip
+            status={sessionStatus === "loading" ? "processing" : sessionStatus}
+          />
         }
       />
       {error ? (
@@ -221,136 +266,118 @@ export default function DriverPage() {
       ) : null}
 
       <Stack spacing={3} sx={{ maxWidth: 800 }}>
-        {!trip ? (
-          <>
-            <SectionCard
-              title="Your scheduled trips"
-              description="Select a trip created for your bus, then start the session."
-            >
-              {scheduled.length === 0 ? (
-                <EmptyState
-                  title="No scheduled trips"
-                  description="Create one below with a confirmed route ID and your bus ID."
-                />
-              ) : (
-                <TableContainer>
-                  <Table size="small">
-                    <TableHead>
-                      <TableRow>
-                        <TableCell>Trip</TableCell>
-                        <TableCell>Route</TableCell>
-                        <TableCell>Bus</TableCell>
-                        <TableCell align="right">Action</TableCell>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {scheduled.map((row) => (
-                        <TableRow key={row.id} hover>
-                          <TableCell sx={{ fontFamily: "monospace", fontSize: 12 }}>
-                            {row.id.slice(0, 8)}…
-                          </TableCell>
-                          <TableCell sx={{ fontFamily: "monospace", fontSize: 12 }}>
-                            {row.route_id.slice(0, 8)}…
-                          </TableCell>
-                          <TableCell sx={{ fontFamily: "monospace", fontSize: 12 }}>
-                            {row.bus_id.slice(0, 8)}…
-                          </TableCell>
-                          <TableCell align="right">
-                            <Button size="small" variant="contained" onClick={() => selectTrip(row)}>
-                              Open
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </TableContainer>
-              )}
-            </SectionCard>
-
-            <SectionCard
-              title="Create scheduled trip"
-              description="Use a confirmed route ID and a bus assigned to your driver account."
-            >
-              <Stack spacing={2}>
-                <TextField
-                  label="Route ID"
-                  value={routeId}
-                  onChange={(e) => setRouteId(e.target.value)}
-                  fullWidth
-                />
-                <TextField
-                  label="Bus ID"
-                  value={busId}
-                  onChange={(e) => setBusId(e.target.value)}
-                  fullWidth
-                />
-                <Button
-                  variant="outlined"
-                  size="large"
-                  onClick={() => void createTrip()}
-                  sx={{ alignSelf: "flex-start" }}
-                >
-                  Create scheduled trip
-                </Button>
-              </Stack>
-            </SectionCard>
-          </>
+        {!duty ? (
+          <SectionCard title="Your assignment">
+            <EmptyState
+              title="No trip assigned yet"
+              description="Ask your college admin to assign you a bus and confirm the route plan."
+            />
+          </SectionCard>
         ) : (
           <>
-            <SectionCard title="Session">
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                Trip {trip.id}
-              </Typography>
-              <Button
-                size="small"
-                sx={{ mb: 2 }}
-                onClick={() => {
-                  setTrip(null);
-                  setQrToken(null);
-                  setItinerary([]);
-                  void loadScheduled();
-                }}
-              >
-                Back to trip list
-              </Button>
+            <SectionCard title="Your assignment">
+              <Stack spacing={0.75}>
+                <Typography variant="body1" sx={{ fontWeight: 600 }}>
+                  {duty.route_name}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Bus {duty.bus_registration}
+                </Typography>
+                {trip?.started_at ? (
+                  <Typography variant="body2" color="text.secondary">
+                    Started: {formatTime(trip.started_at)}
+                  </Typography>
+                ) : null}
+                {trip?.ended_at ? (
+                  <Typography variant="body2" color="text.secondary">
+                    Ended: {formatTime(trip.ended_at)}
+                    {trip.duration_seconds != null
+                      ? ` · ${Math.round(trip.duration_seconds / 60)} min`
+                      : ""}
+                  </Typography>
+                ) : null}
+              </Stack>
+            </SectionCard>
+
+            <SectionCard title="Start or end">
               <TripSessionControls
-                status={sessionStatus}
+                status={busy ? "loading" : sessionStatus}
                 onStart={() => void start()}
                 onEnd={() => void end()}
-                error={error}
+                startLabel="Start trip"
+                endLabel="End trip"
+                error={null}
               />
             </SectionCard>
 
-            {qrToken ? (
-              <SectionCard title="Boarding QR">
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                  Students need this trip ID plus the token below.
-                </Typography>
-                <TripQrPanel status="active" qrValue={qrToken} />
+            {qrToken && trip && sessionStatus === "active" ? (
+              <SectionCard title="Boarding QR for students">
+                <TripQrPanel
+                  status="active"
+                  qrValue={encodeBoardingQr({
+                    trip_id: trip.id,
+                    qr_token: qrToken,
+                  })}
+                  qrImageUrl={boardingQrImageUrl({
+                    trip_id: trip.id,
+                    qr_token: qrToken,
+                  })}
+                  onRefresh={() => {
+                    void apiPost<{ qr_token: string }>(
+                      `/colleges/${collegeId}/trips/${trip.id}/qr/refresh`,
+                    )
+                      .then((r) => setQrToken(r.qr_token))
+                      .catch((err: unknown) => {
+                        setError(
+                          err instanceof ApiError
+                            ? err.message
+                            : "Could not refresh the boarding QR.",
+                        );
+                      });
+                  }}
+                  caption="Students scan this code (or paste the text under it) while your trip is running."
+                />
               </SectionCard>
             ) : null}
 
-            <SectionCard title="Ordered stops">
-              <OrderedStopList
-                stops={itinerary.map((s) => ({
-                  id: s.stop_id,
-                  sequence: s.sequence,
-                  label: s.name,
-                  subtitle: `${s.lat.toFixed(4)}, ${s.lng.toFixed(4)}`,
-                }))}
-              />
-              {itinerary.length ? (
+            {itinerary.length > 0 ? (
+              <SectionCard title="Stops in order">
+                <OrderedStopList
+                  stops={[...itinerary]
+                    .sort((a, b) => a.sequence - b.sequence)
+                    .map((s, i, ordered) => {
+                      const prev = i > 0 ? ordered[i - 1] : null;
+                      const dist =
+                        prev != null
+                          ? Math.round(
+                              haversineMeters(
+                                { lat: prev.lat, lng: prev.lng },
+                                { lat: s.lat, lng: s.lng },
+                              ),
+                            )
+                          : undefined;
+                      return {
+                        id: `${s.stop_id}-${s.sequence}`,
+                        sequence: s.sequence,
+                        label: s.name,
+                        subtitle: `${s.lat.toFixed(4)}, ${s.lng.toFixed(4)}`,
+                        approxDistanceM: dist,
+                      };
+                    })}
+                />
                 <Stack sx={{ mt: 2 }}>
-                  <TripItineraryMap routeId={trip.route_id} stops={itinerary} />
+                  <TripItineraryMap
+                    routeId={duty.route_id}
+                    stops={itinerary}
+                  />
                 </Stack>
-              ) : null}
-            </SectionCard>
+              </SectionCard>
+            ) : null}
 
             {sessionStatus === "active" ? (
               <SectionCard
                 title="Emergency"
-                description="Captures your current GPS and proposes replacement capacity."
+                description="Shares your location and asks the college admin to move remaining students onto other buses."
               >
                 <DistressButton onDistress={() => void distress()} />
               </SectionCard>

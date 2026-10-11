@@ -81,7 +81,12 @@ def test_fleet_import_plan_trip(client: TestClient) -> None:
     _login(client, admin_email)
     campus = client.post(
         f"/api/v1/colleges/{college_id}/campuses",
-        json={"name": "Main", "code": "MAIN"},
+        json={
+            "name": "Main",
+            "code": "MAIN",
+            "lat": 12.9716,
+            "lng": 77.5946,
+        },
     )
     assert campus.status_code == 201, campus.text
     campus_id = campus.json()["id"]
@@ -156,16 +161,18 @@ def test_fleet_import_plan_trip(client: TestClient) -> None:
     assert confirm.status_code == 200, confirm.text
     assert confirm.json()["status"] == "confirmed"
 
-    trip = client.post(
-        f"/api/v1/colleges/{college_id}/trips",
-        json={"route_id": route_id, "bus_id": bus_id},
-    )
-    assert trip.status_code == 201, trip.text
-    trip_id = trip.json()["id"]
-
+    # Planning confirm auto-schedules today's trip for the assigned driver.
     _login(client, driver_email)
-    started = client.post(f"/api/v1/colleges/{college_id}/trips/{trip_id}/start")
+    duty = client.get(f"/api/v1/colleges/{college_id}/me/driver-duty")
+    assert duty.status_code == 200, duty.text
+    assert duty.json()["bus_registration"]
+    assert duty.json()["route_name"]
+    assert duty.json()["can_start"] is True
+
+    started = client.post(f"/api/v1/colleges/{college_id}/me/driver-duty/start")
     assert started.status_code == 200, started.text
+    trip_id = started.json()["trip"]["id"]
+    assert started.json()["trip"]["started_at"]
     qr = started.json()["qr_token"]
     assert started.json()["itinerary"]
 
@@ -196,14 +203,18 @@ def test_fleet_import_plan_trip(client: TestClient) -> None:
     assert distress.status_code == 201, distress.text
     realloc_id = distress.json()["emergency_reallocation"]["id"]
 
+    ended = client.post(f"/api/v1/colleges/{college_id}/me/driver-duty/end")
+    assert ended.status_code == 200, ended.text
+    assert ended.json()["ended_at"]
+    assert ended.json()["duration_seconds"] is not None
+
     _login(client, admin_email)
+    logs = client.get(f"/api/v1/colleges/{college_id}/trips")
+    assert logs.status_code == 200, logs.text
+    assert any(t["id"] == trip_id and t["started_at"] and t["ended_at"] for t in logs.json())
+
     conf = client.post(
         f"/api/v1/colleges/{college_id}/emergency-reallocations/{realloc_id}/confirm"
     )
     assert conf.status_code == 200, conf.text
     assert conf.json()["status"] == "confirmed"
-
-    _login(client, driver_email)
-    ended = client.post(f"/api/v1/colleges/{college_id}/trips/{trip_id}/end")
-    assert ended.status_code == 200, ended.text
-    assert ended.json()["status"] == "ended"

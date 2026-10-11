@@ -33,3 +33,6 @@ class BusOut(ORMModel):
     status: str
     driver_user_id: UUID | None
     created_at: datetime
+    driver_email: str | None = None
+    campus_code: str | None = None
+    campus_name: str | None = None

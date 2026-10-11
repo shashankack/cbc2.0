@@ -27,6 +27,14 @@ class DomainOut(ORMModel):
 class CampusCreate(BaseModel):
     name: str = Field(min_length=1, max_length=255)
     code: str = Field(min_length=1, max_length=64)
+    lat: float | None = Field(default=None, ge=-90, le=90)
+    lng: float | None = Field(default=None, ge=-180, le=180)
+
+
+class CampusUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=255)
+    lat: float | None = Field(default=None, ge=-90, le=90)
+    lng: float | None = Field(default=None, ge=-180, le=180)
 
 
 class CampusSettingsOut(ORMModel):
@@ -41,6 +49,8 @@ class CampusOut(ORMModel):
     college_id: UUID
     name: str
     code: str
+    lat: float | None = None
+    lng: float | None = None
     created_at: datetime
     settings: CampusSettingsOut | None = None
 

@@ -1,35 +1,24 @@
-/** UniTransit semantic design tokens */
+/** UniTransit semantic design tokens — teal / amber / slate (light only). */
 
 export const brand = {
-  navy: "#0B1F3A",
-  royal: "#1B4FBF",
-  teal: "#0D9488",
+  navy: "#0F172A",
+  royal: "#0D9488",
+  teal: "#14B8A6",
+  amber: "#F59E0B",
 } as const;
 
 export const light = {
-  bg: "#F4F6F9",
+  bg: "#F1F5F9",
   surface: "#FFFFFF",
-  text: "#0B1F3A",
-  textMuted: "#5B6575",
+  text: "#0F172A",
+  textMuted: "#64748B",
   border: "#E2E8F0",
   success: "#15803D",
   warning: "#D97706",
   error: "#DC2626",
-  primaryAction: "#1B4FBF",
-  accent: "#0D9488",
-} as const;
-
-export const dark = {
-  bg: "#0B1220",
-  surface: "#151E2E",
-  text: "#E8EEF7",
-  textMuted: "#9AA6B2",
-  border: "#2A3548",
-  success: "#4ADE80",
-  warning: "#FBBF24",
-  error: "#F87171",
-  primaryAction: "#5B8DEF",
-  accent: "#2DD4BF",
+  primaryAction: "#0D9488",
+  accent: "#14B8A6",
+  glow: "rgba(20, 184, 166, 0.12)",
 } as const;
 
 export const space = {
@@ -41,9 +30,8 @@ export const space = {
 } as const;
 
 export const radii = {
-  sm: 6,
-  md: 10,
-  lg: 14,
+  sm: 10,
+  md: 14,
+  lg: 20,
+  pill: 999,
 } as const;
-
-export const COLOR_MODE_KEY = "unitransit-color-mode";

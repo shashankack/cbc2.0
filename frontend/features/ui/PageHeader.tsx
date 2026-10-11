@@ -19,19 +19,23 @@ export default function PageHeader({
   return (
     <Stack
       direction={{ xs: "column", sm: "row" }}
-      spacing={2}
+      spacing={1.5}
       sx={{
         alignItems: { sm: "flex-start" },
         justifyContent: "space-between",
-        mb: 3,
+        mb: 2,
       }}
     >
-      <Box sx={{ minWidth: 0 }}>
+      <Box sx={{ minWidth: 0, maxWidth: 720 }}>
         <Typography variant="h5" component="h1" sx={{ fontWeight: 700 }}>
           {title}
         </Typography>
         {description ? (
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+          <Typography
+            variant="body2"
+            color="text.secondary"
+            sx={{ mt: 0.35, lineHeight: 1.45 }}
+          >
             {description}
           </Typography>
         ) : null}

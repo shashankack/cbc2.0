@@ -13,6 +13,8 @@ from app.schemas.operator import (
     CollegeApplicationOut,
     CollegeOut,
     DomainApproveOut,
+    DomainDecision,
+    DomainOut,
 )
 from app.services import colleges as college_service
 from app.services import operator as operator_service
@@ -90,6 +92,19 @@ def reject_application(
     return CollegeApplicationOut.model_validate(row)
 
 
+@router.get("/domains", response_model=list[DomainOut])
+def list_domains(
+    db: DbSession,
+    _operator: OperatorUser,
+    status: str | None = Query(default="pending"),
+) -> list[DomainOut]:
+    rows = college_service.list_domains(db, status=status)
+    return [
+        DomainOut.model_validate(college_service.serialize_domain(db, r))
+        for r in rows
+    ]
+
+
 @router.post("/domains/{domain_id}/approve", response_model=DomainApproveOut)
 def approve_domain(
     domain_id: uuid.UUID,
@@ -98,3 +113,15 @@ def approve_domain(
 ) -> DomainApproveOut:
     row = college_service.approve_domain(db, domain_id)
     return DomainApproveOut.model_validate(row)
+
+
+@router.post("/domains/{domain_id}/reject", response_model=DomainOut)
+def reject_domain(
+    domain_id: uuid.UUID,
+    db: DbSession,
+    _operator: OperatorUser,
+    body: DomainDecision | None = None,
+) -> DomainOut:
+    decision = body or DomainDecision()
+    row = college_service.reject_domain(db, domain_id, notes=decision.notes)
+    return DomainOut.model_validate(college_service.serialize_domain(db, row))

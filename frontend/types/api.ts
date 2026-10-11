@@ -59,6 +59,8 @@ export type Campus = {
   college_id: string;
   name: string;
   code: string;
+  lat: number | null;
+  lng: number | null;
   created_at: string;
   settings: CampusSettings | null;
 };
@@ -79,6 +81,17 @@ export type Bus = {
   status: string;
   driver_user_id: string | null;
   created_at: string;
+  driver_email?: string | null;
+  campus_code?: string | null;
+  campus_name?: string | null;
+};
+
+export type Driver = {
+  user_id: string;
+  email: string;
+  full_name: string | null;
+  assigned_bus_id: string | null;
+  assigned_bus_registration: string | null;
 };
 
 export type ImportBatch = {
@@ -91,6 +104,11 @@ export type ImportBatch = {
   valid_count: number;
   error_count: number;
   created_at: string;
+  campus_code?: string | null;
+  campus_name?: string | null;
+  active_student_count?: number;
+  locked_student_count?: number;
+  is_active?: boolean;
 };
 
 export type Student = {
@@ -187,4 +205,20 @@ export type Trip = {
   last_lat: number | null;
   last_lng: number | null;
   last_location_at: string | null;
+  route_name?: string | null;
+  bus_registration?: string | null;
+  driver_email?: string | null;
+  duration_seconds?: number | null;
+};
+
+export type DriverDuty = {
+  bus_id: string;
+  bus_registration: string;
+  route_id: string;
+  route_name: string;
+  campus_id: string;
+  trip: Trip | null;
+  can_start: boolean;
+  can_end: boolean;
+  can_distress: boolean;
 };

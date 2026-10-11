@@ -72,6 +72,7 @@ class RouteStatus(StrEnum):
 class StopSource(StrEnum):
     CLUSTER = "cluster"
     MANUAL = "manual"
+    CAMPUS = "campus"
 
 
 class TripStatus(StrEnum):

@@ -6,7 +6,7 @@ import {
   MapLegend,
   RoutePolyline,
   StopMarkers,
-} from "@/components/maps";
+} from "@/components/maps/leaflet";
 import { brand } from "@/theme/tokens";
 import { centerFromPoints, stopsToMarkers } from "./geo";
 

@@ -27,7 +27,7 @@ export default function LoginPage() {
       const q = new URLSearchParams({ email: email.trim() });
       router.push(`/login/verify?${q.toString()}`);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Could not send OTP.");
+      setError(err instanceof ApiError ? err.message : "Could not send a sign-in code.");
     } finally {
       setLoading(false);
     }
@@ -36,21 +36,23 @@ export default function LoginPage() {
   return (
     <AuthShell
       title="Sign in"
-      subtitle="Enter your academic or operator email. We will send a one-time code."
+      subtitle="Students, drivers, college admins, and operators all sign in with their email. We’ll send a one-time code — no password."
     >
       <Stack spacing={2.5} component="form" onSubmit={onSubmit}>
         {error ? <Alert severity="error">{error}</Alert> : null}
         <TextField
-          label="Email"
+          label="Your email"
           type="email"
           required
           fullWidth
           autoComplete="email"
+          placeholder="you@college.edu"
+          helperText="Use the email your college registered for you"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
         />
         <Button type="submit" variant="contained" size="large" disabled={loading}>
-          {loading ? "Sending…" : "Send OTP"}
+          {loading ? "Sending…" : "Email me a sign-in code"}
         </Button>
         <Link href="/" underline="hover" variant="body2" color="text.secondary">
           Back to home

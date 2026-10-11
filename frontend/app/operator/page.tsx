@@ -25,7 +25,7 @@ import type { CollegeApplication } from "@/types/api";
 
 const NAV = [
   { href: "/operator", label: "Colleges" },
-  { href: "/operator/domains", label: "Domains" },
+  { href: "/operator/domains", label: "Email endings" },
 ];
 
 export default function OperatorPage() {
@@ -120,15 +120,15 @@ export default function OperatorPage() {
   return (
     <PortalShell
       title="Operator"
-      description="Review college onboarding"
+      description="Approve new colleges"
       nav={NAV}
     >
       <PageHeader
         title="College applications"
         description={
           pending > 0
-            ? `${pending} pending review`
-            : "Approve colleges and appoint the first admin"
+            ? `${pending} waiting for your review`
+            : "Approve colleges and set their first admin"
         }
       />
       {error ? (
@@ -139,13 +139,13 @@ export default function OperatorPage() {
 
       <Stack spacing={3}>
         <SectionCard
-          title="Applications queue"
-          description="Approve creates the college and college_admin membership for the applicant."
+          title="Applications"
+          description="Approving creates the college and makes the applicant its first admin."
         >
           {rows.length === 0 ? (
             <EmptyState
               title="No applications yet"
-              description="Submit a demo application below, or wait for colleges to apply."
+              description="Submit a test application below, or wait for colleges to apply."
             />
           ) : (
             <TableContainer>
@@ -153,8 +153,8 @@ export default function OperatorPage() {
                 <TableHead>
                   <TableRow>
                     <TableCell>College</TableCell>
-                    <TableCell>Slug</TableCell>
-                    <TableCell>Applicant</TableCell>
+                    <TableCell>Short web name</TableCell>
+                    <TableCell>Applicant email</TableCell>
                     <TableCell>Status</TableCell>
                     <TableCell align="right">Actions</TableCell>
                   </TableRow>
@@ -206,8 +206,8 @@ export default function OperatorPage() {
         </SectionCard>
 
         <SectionCard
-          title="Submit application"
-          description="Demo helper — same public endpoint colleges use."
+          title="Submit a test application"
+          description="Same form colleges use when they apply to join the platform."
         >
           <Stack spacing={2} component="form" onSubmit={submitPublic}>
             <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
