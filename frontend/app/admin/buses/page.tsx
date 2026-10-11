@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Accordion from "@mui/material/Accordion";
 import AccordionDetails from "@mui/material/AccordionDetails";
@@ -63,6 +63,15 @@ export default function AdminBusesPage() {
   const [drafts, setDrafts] = useState<
     Record<string, { status: string; capacity: string; driver_email: string }>
   >({});
+  const [addOpen, setAddOpen] = useState(true);
+  const addEmptySynced = useRef<boolean | null>(null);
+
+  useEffect(() => {
+    const empty = buses.length === 0;
+    if (addEmptySynced.current === empty) return;
+    addEmptySynced.current = empty;
+    setAddOpen(empty);
+  }, [buses.length]);
 
   async function load(cid: string) {
     const [b, c, d] = await Promise.all([
@@ -394,7 +403,8 @@ export default function AdminBusesPage() {
         </SectionCard>
 
         <Accordion
-          defaultExpanded={buses.length === 0}
+          expanded={addOpen}
+          onChange={(_, open) => setAddOpen(open)}
           disableGutters
           elevation={0}
           sx={{

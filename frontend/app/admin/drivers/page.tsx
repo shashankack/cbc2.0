@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import Accordion from "@mui/material/Accordion";
@@ -43,6 +43,15 @@ export default function AdminDriversPage() {
   const [email, setEmail] = useState("");
   const [fullName, setFullName] = useState("");
   const [assignBusId, setAssignBusId] = useState<Record<string, string>>({});
+  const [addOpen, setAddOpen] = useState(true);
+  const addEmptySynced = useRef<boolean | null>(null);
+
+  useEffect(() => {
+    const empty = drivers.length === 0;
+    if (addEmptySynced.current === empty) return;
+    addEmptySynced.current = empty;
+    setAddOpen(empty);
+  }, [drivers.length]);
 
   async function load(cid: string) {
     const [d, b] = await Promise.all([
@@ -218,7 +227,8 @@ export default function AdminDriversPage() {
         </SectionCard>
 
         <Accordion
-          defaultExpanded={drivers.length === 0}
+          expanded={addOpen}
+          onChange={(_, open) => setAddOpen(open)}
           disableGutters
           elevation={0}
           sx={{
