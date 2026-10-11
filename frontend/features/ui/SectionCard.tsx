@@ -10,6 +10,7 @@ type SectionCardProps = {
   description?: string;
   children: ReactNode;
   actions?: ReactNode;
+  dense?: boolean;
 };
 
 export default function SectionCard({
@@ -17,17 +18,14 @@ export default function SectionCard({
   description,
   children,
   actions,
+  dense = false,
 }: SectionCardProps) {
   return (
     <Paper
       sx={{
-        p: { xs: 2, sm: 2.75 },
-        borderRadius: 2.5,
+        p: dense ? { xs: 1.5, sm: 2 } : { xs: 2, sm: 2.25 },
+        borderRadius: 2,
         bgcolor: "background.paper",
-        transition: "border-color 160ms ease, box-shadow 160ms ease",
-        "&:hover": {
-          borderColor: "rgba(13, 148, 136, 0.28)",
-        },
       }}
     >
       {(title || actions) && (
@@ -37,10 +35,10 @@ export default function SectionCard({
             alignItems: "flex-start",
             justifyContent: "space-between",
             gap: 2,
-            mb: title || description ? 2 : 0,
+            mb: title || description ? 1.5 : 0,
           }}
         >
-          <Box>
+          <Box sx={{ minWidth: 0 }}>
             {title ? (
               <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
                 {title}

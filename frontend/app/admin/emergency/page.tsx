@@ -13,14 +13,14 @@ import TableHead from "@mui/material/TableHead";
 import TableRow from "@mui/material/TableRow";
 import Typography from "@mui/material/Typography";
 import { EmergencyReallocationCard } from "@/components/planning";
-import { ADMIN_NAV } from "@/features/admin/nav";
+import { adminShellNav } from "@/features/admin/nav";
 import PortalShell from "@/features/shell/PortalShell";
 import { PageHeader, SectionCard, StatusChip } from "@/features/ui";
 import { apiGet, apiPost, ApiError } from "@/lib/api";
 import { primaryCollegeId, resolveHomePath, useAuth } from "@/lib/auth";
 import { hasRole } from "@/lib/roles";
 
-const nav = [...ADMIN_NAV];
+const { nav, navSections } = adminShellNav();
 
 type EmergencyOut = {
   id: string;
@@ -94,7 +94,7 @@ export default function AdminEmergencyPage() {
   if (loading || !user) return null;
   if (!collegeId) {
     return (
-      <PortalShell title="College admin" nav={nav}>
+      <PortalShell title="College admin" nav={nav} navSections={navSections}>
         <Alert severity="warning">No college membership on this account.</Alert>
       </PortalShell>
     );
@@ -111,10 +111,10 @@ export default function AdminEmergencyPage() {
     })) ?? [];
 
   return (
-    <PortalShell title="College admin" description="Urgent bus replacement" nav={nav}>
+    <PortalShell title="College admin" nav={nav} navSections={navSections}>
       <PageHeader
         title="Emergencies"
-        description="When a driver raises an emergency, review the suggested replacement buses and confirm so remaining students get a new ride."
+        description="Confirm replacement buses after a driver emergency."
         actions={result ? <StatusChip status={result.status} /> : null}
       />
       {error ? (
@@ -123,7 +123,7 @@ export default function AdminEmergencyPage() {
         </Alert>
       ) : null}
 
-      <Stack spacing={3}>
+      <Stack spacing={2.5}>
         <SectionCard title="Needs your decision">
           {rows.length === 0 ? (
             <Alert severity="info">No emergencies waiting for a decision.</Alert>

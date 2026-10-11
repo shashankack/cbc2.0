@@ -13,7 +13,7 @@ import TableHead from "@mui/material/TableHead";
 import TableRow from "@mui/material/TableRow";
 import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
-import { ADMIN_NAV } from "@/features/admin/nav";
+import { adminShellNav } from "@/features/admin/nav";
 import PortalShell from "@/features/shell/PortalShell";
 import {
   EmptyState,
@@ -26,7 +26,7 @@ import { primaryCollegeId, resolveHomePath, useAuth } from "@/lib/auth";
 import { hasRole } from "@/lib/roles";
 import type { Trip } from "@/types/api";
 
-const nav = [...ADMIN_NAV];
+const { nav, navSections } = adminShellNav();
 
 function formatTime(iso: string | null): string {
   if (!iso) return "—";
@@ -98,17 +98,17 @@ export default function AdminTripsPage() {
   if (loading || !user) return null;
   if (!collegeId) {
     return (
-      <PortalShell title="College admin" nav={nav}>
+      <PortalShell title="College admin" nav={nav} navSections={navSections}>
         <Alert severity="warning">No college membership on this account.</Alert>
       </PortalShell>
     );
   }
 
   return (
-    <PortalShell title="College admin" description="When trips started and ended" nav={nav}>
+    <PortalShell title="College admin" nav={nav} navSections={navSections}>
       <PageHeader
         title="Trip history"
-        description="Start and end times from each driver’s day. Trips appear automatically after you confirm a route plan."
+        description="Start and end times after drivers run their trips."
       />
       {error ? (
         <Alert severity="error" sx={{ mb: 2 }}>
@@ -116,74 +116,81 @@ export default function AdminTripsPage() {
         </Alert>
       ) : null}
 
-      <Stack spacing={3}>
-        <SectionCard title="At a glance">
+      <SectionCard title="Trip list">
+        <Stack
+          direction={{ xs: "column", sm: "row" }}
+          spacing={1.5}
+          sx={{
+            mb: 2,
+            alignItems: { sm: "center" },
+            justifyContent: "space-between",
+          }}
+        >
           <Typography variant="body2" color="text.secondary">
-            {summary.total} trips · {summary.active} running now · {summary.ended}{" "}
+            {summary.total} trips · {summary.active} running · {summary.ended}{" "}
             finished
-            {summary.avgMin != null
-              ? ` · average length ${summary.avgMin} min`
-              : ""}
+            {summary.avgMin != null ? ` · avg ${summary.avgMin} min` : ""}
           </Typography>
-        </SectionCard>
-
-        <SectionCard title="Trip list">
           <TextField
             select
             size="small"
             label="Show"
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            sx={{ mb: 2, minWidth: 180 }}
+            sx={{ minWidth: 180 }}
           >
             <MenuItem value="all">All trips</MenuItem>
             <MenuItem value="scheduled">Not started yet</MenuItem>
             <MenuItem value="active">Running now</MenuItem>
             <MenuItem value="ended">Finished</MenuItem>
           </TextField>
-          {trips.length === 0 ? (
-            <EmptyState
-              title="No trips yet"
-              description="Confirm a route plan with drivers assigned to buses, then have drivers start their trip."
-            />
-          ) : (
-            <TableContainer>
-              <Table size="small">
-                <TableHead>
-                  <TableRow>
-                    <TableCell>Driver</TableCell>
-                    <TableCell>Bus</TableCell>
-                    <TableCell>Route</TableCell>
-                    <TableCell>Status</TableCell>
-                    <TableCell>Started</TableCell>
-                    <TableCell>Ended</TableCell>
-                    <TableCell>Duration</TableCell>
+        </Stack>
+        {trips.length === 0 ? (
+          <EmptyState
+            title="No trips yet"
+            description="Confirm a route plan with drivers assigned to buses, then have drivers start their trip."
+          />
+        ) : (
+          <TableContainer>
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell>Driver</TableCell>
+                  <TableCell>Bus</TableCell>
+                  <TableCell>Route</TableCell>
+                  <TableCell>Status</TableCell>
+                  <TableCell>Started</TableCell>
+                  <TableCell>Ended</TableCell>
+                  <TableCell>Duration</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {trips.map((t) => (
+                  <TableRow key={t.id} hover>
+                    <TableCell>
+                      {t.driver_email ?? t.driver_user_id.slice(0, 8)}
+                    </TableCell>
+                    <TableCell>
+                      {t.bus_registration ?? t.bus_id.slice(0, 8)}
+                    </TableCell>
+                    <TableCell>
+                      {t.route_name ?? t.route_id.slice(0, 8)}
+                    </TableCell>
+                    <TableCell>
+                      <StatusChip status={t.status} />
+                    </TableCell>
+                    <TableCell>{formatTime(t.started_at)}</TableCell>
+                    <TableCell>{formatTime(t.ended_at)}</TableCell>
+                    <TableCell>
+                      {formatDuration(t.duration_seconds)}
+                    </TableCell>
                   </TableRow>
-                </TableHead>
-                <TableBody>
-                  {trips.map((t) => (
-                    <TableRow key={t.id} hover>
-                      <TableCell>{t.driver_email ?? t.driver_user_id.slice(0, 8)}</TableCell>
-                      <TableCell>
-                        {t.bus_registration ?? t.bus_id.slice(0, 8)}
-                      </TableCell>
-                      <TableCell>{t.route_name ?? t.route_id.slice(0, 8)}</TableCell>
-                      <TableCell>
-                        <StatusChip status={t.status} />
-                      </TableCell>
-                      <TableCell>{formatTime(t.started_at)}</TableCell>
-                      <TableCell>{formatTime(t.ended_at)}</TableCell>
-                      <TableCell>
-                        {formatDuration(t.duration_seconds)}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          )}
-        </SectionCard>
-      </Stack>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        )}
+      </SectionCard>
     </PortalShell>
   );
 }

@@ -1,11 +1,15 @@
 "use client";
 
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { useRouter, useSearchParams } from "next/navigation";
+import Accordion from "@mui/material/Accordion";
+import AccordionDetails from "@mui/material/AccordionDetails";
+import AccordionSummary from "@mui/material/AccordionSummary";
 import Alert from "@mui/material/Alert";
 import Button from "@mui/material/Button";
 import CircularProgress from "@mui/material/CircularProgress";
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import MenuItem from "@mui/material/MenuItem";
 import Stack from "@mui/material/Stack";
 import Table from "@mui/material/Table";
@@ -25,7 +29,7 @@ import {
   PlanStopEditor,
   type PlanEditMode,
 } from "@/components/planning";
-import { ADMIN_NAV } from "@/features/admin/nav";
+import { adminShellNav } from "@/features/admin/nav";
 import PortalShell from "@/features/shell/PortalShell";
 import {
   approxMinutesFromMeters,
@@ -53,7 +57,7 @@ const PlanningProposalMap = dynamic(
   },
 );
 
-const nav = [...ADMIN_NAV];
+const { nav, navSections } = adminShellNav();
 
 type RunSummary = Omit<PlanningRun, "stops" | "routes" | "items"> & {
   stops?: PlanningRun["stops"];
@@ -93,10 +97,19 @@ function AdminPlanningPageInner() {
   const [splitStudentIds, setSplitStudentIds] = useState<string[]>([]);
   const [editBusy, setEditBusy] = useState(false);
   const [mapReady, setMapReady] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const historyRunKey = useRef<string | null | undefined>(undefined);
 
   useEffect(() => {
     setMapReady(true);
   }, []);
+
+  useEffect(() => {
+    const key = run?.id ?? null;
+    if (historyRunKey.current === key) return;
+    historyRunKey.current = key;
+    setHistoryOpen(!run);
+  }, [run]);
 
   useEffect(() => {
     if (loading) return;
@@ -480,7 +493,7 @@ function AdminPlanningPageInner() {
   if (loading || !user) return null;
   if (!collegeId) {
     return (
-      <PortalShell title="College admin" nav={nav}>
+      <PortalShell title="College admin" nav={nav} navSections={navSections}>
         <Alert severity="warning">No college membership on this account.</Alert>
       </PortalShell>
     );
@@ -495,10 +508,10 @@ function AdminPlanningPageInner() {
     campuses.find((c) => c.id === (run?.campus_id ?? campusId))?.code ?? "";
 
   return (
-    <PortalShell title="College admin" description="Build and lock bus routes" nav={nav}>
+    <PortalShell title="College admin" nav={nav} navSections={navSections}>
       <PageHeader
         title="Plan bus routes"
-        description="Choose a campus that already has uploaded students and ready buses. Create a draft plan, adjust stops if needed, then confirm to lock pickups for students."
+        description="Build a draft from uploaded students, adjust stops, then lock pickups."
         actions={
           <Button href="/admin/import" variant="outlined">
             Upload students
@@ -510,19 +523,23 @@ function AdminPlanningPageInner() {
           {error}
         </Alert>
       ) : null}
-      <Stack spacing={3}>
-        <SectionCard title="Create a draft plan">
-          <Stack spacing={2}>
+      <Stack spacing={2.5}>
+        <SectionCard dense>
+          <Stack
+            direction={{ xs: "column", md: "row" }}
+            spacing={1.5}
+            sx={{ alignItems: { md: "flex-end" } }}
+          >
             <TextField
               select
               label="Campus"
+              size="small"
               value={campusId}
               onChange={(e) => {
                 setCampusId(e.target.value);
                 setBatchId("");
               }}
               fullWidth
-              helperText="Only students and buses for this campus are used."
             >
               {campuses.map((c) => (
                 <MenuItem key={c.id} value={c.id}>
@@ -532,18 +549,18 @@ function AdminPlanningPageInner() {
             </TextField>
             <TextField
               select
-              label="Which student list?"
+              label="Student list"
+              size="small"
               value={batchId}
               onChange={(e) => setBatchId(e.target.value)}
               fullWidth
-              helperText="Optional — leave as “All students” to include everyone uploaded for this campus."
             >
-              <MenuItem value="">All students on this campus</MenuItem>
+              <MenuItem value="">All students on campus</MenuItem>
               {campusBatches.map((b) => (
                 <MenuItem key={b.id} value={b.id}>
                   {new Date(b.created_at).toLocaleString()}
-                  {b.valid_count != null ? ` · ${b.valid_count} students` : ""}
-                  {b.is_active ? " · ready to plan" : ""}
+                  {b.valid_count != null ? ` · ${b.valid_count}` : ""}
+                  {b.is_active ? " · ready" : ""}
                 </MenuItem>
               ))}
             </TextField>
@@ -551,49 +568,67 @@ function AdminPlanningPageInner() {
               variant="contained"
               onClick={() => void runPlanning()}
               disabled={!campusId || running}
-              sx={{ alignSelf: "flex-start" }}
+              sx={{ whiteSpace: "nowrap", minWidth: 160 }}
             >
-              {running ? "Building plan…" : "Build draft routes"}
+              {running ? "Building…" : "Build draft"}
             </Button>
           </Stack>
         </SectionCard>
 
         {runs.length > 0 ? (
-          <SectionCard title="Earlier plans">
-            <TableContainer>
-              <Table size="small">
-                <TableHead>
-                  <TableRow>
-                    <TableCell>Created</TableCell>
-                    <TableCell>Campus</TableCell>
-                    <TableCell>Status</TableCell>
-                    <TableCell align="right">Open</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {runs.map((r) => (
-                    <TableRow key={r.id} hover selected={run?.id === r.id}>
-                      <TableCell>
-                        {new Date(r.created_at).toLocaleString()}
-                      </TableCell>
-                      <TableCell>
-                        {campuses.find((c) => c.id === r.campus_id)?.code ??
-                          r.campus_id.slice(0, 8)}
-                      </TableCell>
-                      <TableCell>
-                        <StatusChip status={r.status} />
-                      </TableCell>
-                      <TableCell align="right">
-                        <Button size="small" onClick={() => void openRun(r.id)}>
-                          View
-                        </Button>
-                      </TableCell>
+          <Accordion
+            expanded={historyOpen}
+            onChange={(_, open) => setHistoryOpen(open)}
+            disableGutters
+            elevation={0}
+            sx={{
+              border: "1px solid",
+              borderColor: "divider",
+              borderRadius: 2,
+              "&:before": { display: "none" },
+            }}
+          >
+            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+              <Typography variant="subtitle2">
+                Earlier plans ({runs.length})
+              </Typography>
+            </AccordionSummary>
+            <AccordionDetails>
+              <TableContainer>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Created</TableCell>
+                      <TableCell>Campus</TableCell>
+                      <TableCell>Status</TableCell>
+                      <TableCell align="right">Open</TableCell>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          </SectionCard>
+                  </TableHead>
+                  <TableBody>
+                    {runs.map((r) => (
+                      <TableRow key={r.id} hover selected={run?.id === r.id}>
+                        <TableCell>
+                          {new Date(r.created_at).toLocaleString()}
+                        </TableCell>
+                        <TableCell>
+                          {campuses.find((c) => c.id === r.campus_id)?.code ??
+                            r.campus_id.slice(0, 8)}
+                        </TableCell>
+                        <TableCell>
+                          <StatusChip status={r.status} />
+                        </TableCell>
+                        <TableCell align="right">
+                          <Button size="small" onClick={() => void openRun(r.id)}>
+                            View
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            </AccordionDetails>
+          </Accordion>
         ) : null}
 
         {run ? (
@@ -894,7 +929,7 @@ export default function AdminPlanningPage() {
   return (
     <Suspense
       fallback={
-        <PortalShell title="College admin" nav={nav}>
+        <PortalShell title="College admin" nav={nav} navSections={navSections}>
           <Stack sx={{ py: 4, alignItems: "center" }}>
             <CircularProgress size={28} aria-label="Loading planning" />
           </Stack>

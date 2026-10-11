@@ -3,6 +3,9 @@
 import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
+import Accordion from "@mui/material/Accordion";
+import AccordionDetails from "@mui/material/AccordionDetails";
+import AccordionSummary from "@mui/material/AccordionSummary";
 import Alert from "@mui/material/Alert";
 import Button from "@mui/material/Button";
 import CircularProgress from "@mui/material/CircularProgress";
@@ -10,6 +13,7 @@ import Dialog from "@mui/material/Dialog";
 import DialogActions from "@mui/material/DialogActions";
 import DialogContent from "@mui/material/DialogContent";
 import DialogTitle from "@mui/material/DialogTitle";
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import Stack from "@mui/material/Stack";
 import Table from "@mui/material/Table";
 import TableBody from "@mui/material/TableBody";
@@ -20,7 +24,7 @@ import TableRow from "@mui/material/TableRow";
 import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 import AdminDashboardHero from "@/features/admin/AdminDashboardHero";
-import { ADMIN_NAV } from "@/features/admin/nav";
+import { adminShellNav } from "@/features/admin/nav";
 import { roundCoord } from "@/features/maps/geo";
 import PortalShell from "@/features/shell/PortalShell";
 import {
@@ -34,7 +38,7 @@ import { primaryCollegeId, resolveHomePath, useAuth } from "@/lib/auth";
 import { hasRole } from "@/lib/roles";
 import type { Campus } from "@/types/api";
 
-const nav = [...ADMIN_NAV];
+const { nav, navSections } = adminShellNav();
 
 const DepotLocationPicker = dynamic(
   () => import("@/features/maps/DepotLocationPicker"),
@@ -102,6 +106,7 @@ export default function AdminCampusesPage() {
   } | null>(null);
   const [geoBusy, setGeoBusy] = useState(false);
   const [geoError, setGeoError] = useState<string | null>(null);
+  const [showMapNumbers, setShowMapNumbers] = useState(false);
 
   const collegeId = user ? primaryCollegeId(user) : null;
 
@@ -287,7 +292,7 @@ export default function AdminCampusesPage() {
 
   if (!collegeId) {
     return (
-      <PortalShell title="College admin" nav={nav}>
+      <PortalShell title="College admin" nav={nav} navSections={navSections}>
         <Alert severity="warning">
           This email is not linked to a college yet. Ask the platform operator to
           approve your college application, then sign in again.
@@ -301,25 +306,21 @@ export default function AdminCampusesPage() {
   ).length;
 
   return (
-    <PortalShell
-      title="College admin"
-      description="Campuses and student email domains"
-      nav={nav}
-    >
+    <PortalShell title="College admin" nav={nav} navSections={navSections}>
       <AdminDashboardHero
         collegeLabel={user.email}
         stats={[
           { label: "Campuses", value: campuses.length },
-          { label: "Campus pin set", value: campusesWithDepot },
+          { label: "Pinned", value: campusesWithDepot },
           {
-            label: "Ready for routes",
+            label: "Ready",
             value: campusesWithDepot > 0 ? "Yes" : "No",
           },
         ]}
       />
       <PageHeader
-        title="Campuses & student emails"
-        description="Mark where each campus sits on the map. Every bus route will start and end there. You can search the map or use your phone’s location."
+        title="Campuses"
+        description="Place each campus on the map — every bus route starts and ends there."
       />
       {error ? (
         <Alert severity="error" sx={{ mb: 2 }}>
@@ -327,11 +328,8 @@ export default function AdminCampusesPage() {
         </Alert>
       ) : null}
 
-      <Stack spacing={3}>
-        <SectionCard
-          title="Your campuses"
-          description="Set a campus pin and route preferences before you upload students or plan buses."
-        >
+      <Stack spacing={2.5}>
+        <SectionCard title="Your campuses">
           {campuses.length === 0 ? (
             <EmptyState
               title="No campuses yet"
@@ -343,10 +341,14 @@ export default function AdminCampusesPage() {
                 <TableHead>
                   <TableRow>
                     <TableCell>Name</TableCell>
-                    <TableCell>Short code</TableCell>
-                    <TableCell>North–south (map)</TableCell>
-                    <TableCell>East–west (map)</TableCell>
+                    <TableCell>Code</TableCell>
                     <TableCell>Status</TableCell>
+                    {showMapNumbers ? (
+                      <>
+                        <TableCell>North–south</TableCell>
+                        <TableCell>East–west</TableCell>
+                      </>
+                    ) : null}
                     <TableCell align="right">Actions</TableCell>
                   </TableRow>
                 </TableHead>
@@ -358,60 +360,65 @@ export default function AdminCampusesPage() {
                       <TableRow key={c.id} hover>
                         <TableCell>{c.name}</TableCell>
                         <TableCell>{c.code}</TableCell>
-                        <TableCell sx={{ minWidth: 120 }}>
-                          <TextField
-                            size="small"
-                            value={draft.lat}
-                            onChange={(e) =>
-                              setCoordDrafts((prev) => ({
-                                ...prev,
-                                [c.id]: { ...draft, lat: e.target.value },
-                              }))
-                            }
-                            placeholder="From map"
-                            slotProps={{
-                              htmlInput: {
-                                "aria-label": `Map north-south for ${c.name}`,
-                              },
-                            }}
-                          />
-                        </TableCell>
-                        <TableCell sx={{ minWidth: 120 }}>
-                          <TextField
-                            size="small"
-                            value={draft.lng}
-                            onChange={(e) =>
-                              setCoordDrafts((prev) => ({
-                                ...prev,
-                                [c.id]: { ...draft, lng: e.target.value },
-                              }))
-                            }
-                            placeholder="From map"
-                            slotProps={{
-                              htmlInput: {
-                                "aria-label": `Map east-west for ${c.name}`,
-                              },
-                            }}
-                          />
-                        </TableCell>
                         <TableCell>
-                          <Stack spacing={0.5}>
+                          <Stack direction="row" spacing={0.5} useFlexGap sx={{ flexWrap: "wrap" }}>
                             <StatusChip
                               status={depotOk ? "available" : "pending"}
-                              label={depotOk ? "Campus pin set" : "Needs campus pin"}
+                              label={depotOk ? "Pin set" : "Needs pin"}
                             />
                             <StatusChip
                               status={c.settings ? "active" : "pending"}
-                              label={
-                                c.settings
-                                  ? "Route preferences saved"
-                                  : "Needs route preferences"
-                              }
+                              label={c.settings ? "Prefs ok" : "Needs prefs"}
                             />
                           </Stack>
                         </TableCell>
+                        {showMapNumbers ? (
+                          <>
+                            <TableCell sx={{ minWidth: 110 }}>
+                              <TextField
+                                size="small"
+                                value={draft.lat}
+                                onChange={(e) =>
+                                  setCoordDrafts((prev) => ({
+                                    ...prev,
+                                    [c.id]: { ...draft, lat: e.target.value },
+                                  }))
+                                }
+                                placeholder="From map"
+                                slotProps={{
+                                  htmlInput: {
+                                    "aria-label": `Map north-south for ${c.name}`,
+                                  },
+                                }}
+                              />
+                            </TableCell>
+                            <TableCell sx={{ minWidth: 110 }}>
+                              <TextField
+                                size="small"
+                                value={draft.lng}
+                                onChange={(e) =>
+                                  setCoordDrafts((prev) => ({
+                                    ...prev,
+                                    [c.id]: { ...draft, lng: e.target.value },
+                                  }))
+                                }
+                                placeholder="From map"
+                                slotProps={{
+                                  htmlInput: {
+                                    "aria-label": `Map east-west for ${c.name}`,
+                                  },
+                                }}
+                              />
+                            </TableCell>
+                          </>
+                        ) : null}
                         <TableCell align="right">
-                          <Stack spacing={0.5} sx={{ alignItems: "flex-end" }}>
+                          <Stack
+                            direction="row"
+                            spacing={0.75}
+                            useFlexGap
+                            sx={{ flexWrap: "wrap", justifyContent: "flex-end" }}
+                          >
                             <Button
                               size="small"
                               variant="outlined"
@@ -425,19 +432,19 @@ export default function AdminCampusesPage() {
                             >
                               Place on map
                             </Button>
-                            <Button
-                              size="small"
-                              onClick={() => void saveCoords(c.id)}
-                            >
-                              Save campus pin
-                            </Button>
+                            {showMapNumbers ? (
+                              <Button
+                                size="small"
+                                onClick={() => void saveCoords(c.id)}
+                              >
+                                Save pin
+                              </Button>
+                            ) : null}
                             <Button
                               size="small"
                               onClick={() => void saveSettings(c.id)}
                             >
-                              {c.settings
-                                ? "Update preferences"
-                                : "Save preferences"}
+                              {c.settings ? "Update prefs" : "Save prefs"}
                             </Button>
                           </Stack>
                         </TableCell>
@@ -449,46 +456,17 @@ export default function AdminCampusesPage() {
             </TableContainer>
           )}
 
-          <Stack spacing={2} sx={{ mt: 2 }}>
-            <Typography variant="subtitle2">
-              How far students can walk & how pickups are grouped
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              These apply when you create routes for a campus. Defaults work for
-              most colleges — change them only if needed.
-            </Typography>
-            <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
-              <TextField
-                label="Farthest walk to a stop (meters)"
-                helperText="How far a student may walk from home to their pickup"
-                value={maxWalk}
-                onChange={(e) => setMaxWalk(e.target.value)}
-                fullWidth
-              />
-              <TextField
-                label="Group nearby homes within (meters)"
-                helperText="Homes closer than this share one pickup stop"
-                value={clusterEps}
-                onChange={(e) => setClusterEps(e.target.value)}
-                fullWidth
-              />
-              <TextField
-                label="Minimum homes for a stop"
-                helperText="Fewer than this stay as single pickups"
-                value={minSamples}
-                onChange={(e) => setMinSamples(e.target.value)}
-                fullWidth
-              />
-              <TextField
-                label="Minimum students on a bus"
-                helperText="Smaller groups are merged when possible"
-                value={minPerRoute}
-                onChange={(e) => setMinPerRoute(e.target.value)}
-                fullWidth
-              />
-            </Stack>
+          <Stack spacing={1.5} sx={{ mt: 2 }}>
+            <Button
+              size="small"
+              onClick={() => setShowMapNumbers((v) => !v)}
+              sx={{ alignSelf: "flex-start" }}
+            >
+              {showMapNumbers ? "Hide map numbers" : "Enter map numbers"}
+            </Button>
+
             <Typography variant="subtitle2">Add a campus</Typography>
-            <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
+            <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5}>
               <TextField
                 label="Campus name"
                 placeholder="e.g. Ring Road Campus"
@@ -499,26 +477,29 @@ export default function AdminCampusesPage() {
               <TextField
                 label="Short code"
                 placeholder="e.g. RING"
-                helperText="A short label used in lists"
                 value={code}
                 onChange={(e) => setCode(e.target.value)}
                 fullWidth
               />
-              <TextField
-                label="North–south (optional)"
-                placeholder="Or use Place on map"
-                value={createLat}
-                onChange={(e) => setCreateLat(e.target.value)}
-                fullWidth
-              />
-              <TextField
-                label="East–west (optional)"
-                placeholder="Or use Place on map"
-                value={createLng}
-                onChange={(e) => setCreateLng(e.target.value)}
-                fullWidth
-              />
             </Stack>
+            {showMapNumbers ? (
+              <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5}>
+                <TextField
+                  label="North–south (optional)"
+                  placeholder="Or use Place on map"
+                  value={createLat}
+                  onChange={(e) => setCreateLat(e.target.value)}
+                  fullWidth
+                />
+                <TextField
+                  label="East–west (optional)"
+                  placeholder="Or use Place on map"
+                  value={createLng}
+                  onChange={(e) => setCreateLng(e.target.value)}
+                  fullWidth
+                />
+              </Stack>
+            ) : null}
             <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap" }}>
               <Button
                 variant="outlined"
@@ -535,31 +516,83 @@ export default function AdminCampusesPage() {
                 Add campus
               </Button>
             </Stack>
+
+            <Accordion disableGutters elevation={0} sx={{ border: "1px solid", borderColor: "divider", borderRadius: 2, "&:before": { display: "none" } }}>
+              <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                <Typography variant="subtitle2">
+                  Advanced route preferences
+                </Typography>
+              </AccordionSummary>
+              <AccordionDetails>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+                  Defaults work for most colleges. Change only if pickups look wrong.
+                </Typography>
+                <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5}>
+                  <TextField
+                    label="Farthest walk to a stop (m)"
+                    value={maxWalk}
+                    onChange={(e) => setMaxWalk(e.target.value)}
+                    fullWidth
+                    size="small"
+                  />
+                  <TextField
+                    label="Group homes within (m)"
+                    value={clusterEps}
+                    onChange={(e) => setClusterEps(e.target.value)}
+                    fullWidth
+                    size="small"
+                  />
+                  <TextField
+                    label="Min homes for a stop"
+                    value={minSamples}
+                    onChange={(e) => setMinSamples(e.target.value)}
+                    fullWidth
+                    size="small"
+                  />
+                  <TextField
+                    label="Min students on a bus"
+                    value={minPerRoute}
+                    onChange={(e) => setMinPerRoute(e.target.value)}
+                    fullWidth
+                    size="small"
+                  />
+                </Stack>
+                {campuses[0] ? (
+                  <Button
+                    sx={{ mt: 1.5 }}
+                    size="small"
+                    variant="outlined"
+                    onClick={() => void saveSettings(campuses[0].id)}
+                  >
+                    Save preferences for {campuses[0].code}
+                  </Button>
+                ) : null}
+              </AccordionDetails>
+            </Accordion>
           </Stack>
         </SectionCard>
 
         <SectionCard
-          title="Which emails belong to your college"
-          description="Ask to approve your college email ending (like pes.edu). A platform operator must confirm it before students can sign in with those addresses."
+          title="Student email ending"
+          description="Request approval for endings like pes.edu so students can sign in."
         >
-          <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
+          <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5}>
             <TextField
-              label="College email ending"
+              label="Email ending"
               placeholder="e.g. pes.edu"
-              helperText="The part after @ in student emails"
               value={domain}
               onChange={(e) => setDomain(e.target.value)}
               fullWidth
+              size="small"
             />
             <Button variant="outlined" onClick={() => void requestDomain()}>
               Request approval
             </Button>
           </Stack>
           {domainToken ? (
-            <Alert severity="info" sx={{ mt: 2 }}>
+            <Alert severity="info" sx={{ mt: 1.5 }}>
               <Typography variant="body2">
-                Send this reference to the platform operator so they can approve
-                your email ending:
+                Send this reference to the platform operator:
               </Typography>
               <Typography variant="body2" sx={{ fontFamily: "monospace", mt: 0.5 }}>
                 {domainToken}

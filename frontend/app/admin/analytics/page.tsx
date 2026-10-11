@@ -10,14 +10,14 @@ import TableCell from "@mui/material/TableCell";
 import TableContainer from "@mui/material/TableContainer";
 import TableHead from "@mui/material/TableHead";
 import TableRow from "@mui/material/TableRow";
-import { ADMIN_NAV } from "@/features/admin/nav";
+import { adminShellNav } from "@/features/admin/nav";
 import PortalShell from "@/features/shell/PortalShell";
 import { PageHeader, SectionCard, StatusChip } from "@/features/ui";
 import { apiGet, ApiError } from "@/lib/api";
 import { primaryCollegeId, resolveHomePath, useAuth } from "@/lib/auth";
 import { hasRole } from "@/lib/roles";
 
-const nav = [...ADMIN_NAV];
+const { nav, navSections } = adminShellNav();
 
 type AttendanceRow = {
   trip_id: string;
@@ -61,17 +61,17 @@ export default function AdminAnalyticsPage() {
   if (loading || !user) return null;
   if (!collegeId) {
     return (
-      <PortalShell title="College admin" nav={nav}>
+      <PortalShell title="College admin" nav={nav} navSections={navSections}>
         <Alert severity="warning">No college membership on this account.</Alert>
       </PortalShell>
     );
   }
 
   return (
-    <PortalShell title="College admin" description="Who got on the bus" nav={nav}>
+    <PortalShell title="College admin" nav={nav} navSections={navSections}>
       <PageHeader
         title="Who boarded"
-        description="Simple counts: how many students were assigned to each trip versus how many checked in with the driver’s QR."
+        description="Assigned vs checked-in counts per trip."
       />
       {error ? (
         <Alert severity="error" sx={{ mb: 2 }}>

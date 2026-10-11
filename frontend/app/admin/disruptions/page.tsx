@@ -12,14 +12,14 @@ import TableContainer from "@mui/material/TableContainer";
 import TableHead from "@mui/material/TableHead";
 import TableRow from "@mui/material/TableRow";
 import Typography from "@mui/material/Typography";
-import { ADMIN_NAV } from "@/features/admin/nav";
+import { adminShellNav } from "@/features/admin/nav";
 import PortalShell from "@/features/shell/PortalShell";
 import { PageHeader, SectionCard, StatusChip } from "@/features/ui";
 import { apiGet, apiPost, ApiError } from "@/lib/api";
 import { primaryCollegeId, resolveHomePath, useAuth } from "@/lib/auth";
 import { hasRole } from "@/lib/roles";
 
-const nav = [...ADMIN_NAV];
+const { nav, navSections } = adminShellNav();
 
 type EmergencyOut = {
   id: string;
@@ -86,17 +86,17 @@ export default function AdminDisruptionsPage() {
   if (loading || !user) return null;
   if (!collegeId) {
     return (
-      <PortalShell title="College admin" nav={nav}>
+      <PortalShell title="College admin" nav={nav} navSections={navSections}>
         <Alert severity="warning">No college membership on this account.</Alert>
       </PortalShell>
     );
   }
 
   return (
-    <PortalShell title="College admin" description="When a bus can’t run" nav={nav}>
+    <PortalShell title="College admin" nav={nav} navSections={navSections}>
       <PageHeader
         title="Bus problems"
-        description="When a bus goes out of service, use Buses → “Bus problem → reassign”. Review the suggested moves here, then confirm so students get a new bus."
+        description="Review reassignment suggestions when a bus can’t run."
         actions={
           <Button href="/admin/buses" variant="outlined">
             Buses
@@ -173,10 +173,6 @@ export default function AdminDisruptionsPage() {
             </Table>
           </TableContainer>
         )}
-        <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 2 }}>
-          Distress emergencies remain under Emergency; this page is for planned
-          unavailability only.
-        </Typography>
       </SectionCard>
     </PortalShell>
   );

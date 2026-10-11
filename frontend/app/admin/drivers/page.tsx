@@ -2,6 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
+import Accordion from "@mui/material/Accordion";
+import AccordionDetails from "@mui/material/AccordionDetails";
+import AccordionSummary from "@mui/material/AccordionSummary";
 import Alert from "@mui/material/Alert";
 import Button from "@mui/material/Button";
 import MenuItem from "@mui/material/MenuItem";
@@ -14,7 +18,7 @@ import TableHead from "@mui/material/TableHead";
 import TableRow from "@mui/material/TableRow";
 import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
-import { ADMIN_NAV } from "@/features/admin/nav";
+import { adminShellNav } from "@/features/admin/nav";
 import PortalShell from "@/features/shell/PortalShell";
 import {
   EmptyState,
@@ -26,6 +30,8 @@ import { apiGet, apiPatch, apiPost, ApiError } from "@/lib/api";
 import { primaryCollegeId, resolveHomePath, useAuth } from "@/lib/auth";
 import { hasRole } from "@/lib/roles";
 import type { Bus, Driver } from "@/types/api";
+
+const { nav, navSections } = adminShellNav();
 
 export default function AdminDriversPage() {
   const router = useRouter();
@@ -110,17 +116,17 @@ export default function AdminDriversPage() {
   if (loading || !user) return null;
   if (!collegeId) {
     return (
-      <PortalShell title="College admin" nav={[...ADMIN_NAV]}>
+      <PortalShell title="College admin" nav={nav} navSections={navSections}>
         <Alert severity="warning">No college membership on this account.</Alert>
       </PortalShell>
     );
   }
 
   return (
-    <PortalShell title="College admin" description="Who drives each bus" nav={[...ADMIN_NAV]}>
+    <PortalShell title="College admin" nav={nav} navSections={navSections}>
       <PageHeader
         title="Drivers"
-        description="Add each driver’s email, then assign them to one bus. They sign in with that email and a one-time code."
+        description="Add emails, assign one bus each. Drivers sign in with a one-time code."
       />
       {error ? (
         <Alert severity="error" sx={{ mb: 2 }}>
@@ -128,7 +134,7 @@ export default function AdminDriversPage() {
         </Alert>
       ) : null}
 
-      <Stack spacing={3}>
+      <Stack spacing={2.5}>
         <SectionCard title="Driver list">
           {drivers.length === 0 ? (
             <EmptyState
@@ -211,34 +217,50 @@ export default function AdminDriversPage() {
           )}
         </SectionCard>
 
-        <SectionCard title="Add a driver">
-          <Stack spacing={2} sx={{ maxWidth: 560 }}>
-            <TextField
-              label="Driver’s email"
-              type="email"
-              placeholder="driver@college.edu"
-              helperText="They’ll sign in with a code sent to this address"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              fullWidth
-              required
-            />
-            <TextField
-              label="Full name (optional)"
-              placeholder="e.g. Priya Sharma"
-              value={fullName}
-              onChange={(e) => setFullName(e.target.value)}
-              fullWidth
-            />
-            <Button
-              variant="contained"
-              onClick={() => void addDriver()}
-              sx={{ alignSelf: "flex-start" }}
-            >
-              Add driver
-            </Button>
-          </Stack>
-        </SectionCard>
+        <Accordion
+          defaultExpanded={drivers.length === 0}
+          disableGutters
+          elevation={0}
+          sx={{
+            border: "1px solid",
+            borderColor: "divider",
+            borderRadius: 2,
+            "&:before": { display: "none" },
+          }}
+        >
+          <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+            <Typography variant="subtitle2">Add a driver</Typography>
+          </AccordionSummary>
+          <AccordionDetails>
+            <Stack spacing={1.5} sx={{ maxWidth: 560 }}>
+              <TextField
+                label="Driver’s email"
+                type="email"
+                size="small"
+                placeholder="driver@college.edu"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                fullWidth
+                required
+              />
+              <TextField
+                label="Full name (optional)"
+                size="small"
+                placeholder="e.g. Priya Sharma"
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+                fullWidth
+              />
+              <Button
+                variant="contained"
+                onClick={() => void addDriver()}
+                sx={{ alignSelf: "flex-start" }}
+              >
+                Add driver
+              </Button>
+            </Stack>
+          </AccordionDetails>
+        </Accordion>
       </Stack>
     </PortalShell>
   );

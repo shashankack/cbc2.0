@@ -2,9 +2,13 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import Accordion from "@mui/material/Accordion";
+import AccordionDetails from "@mui/material/AccordionDetails";
+import AccordionSummary from "@mui/material/AccordionSummary";
 import Alert from "@mui/material/Alert";
 import Button from "@mui/material/Button";
 import ButtonGroup from "@mui/material/ButtonGroup";
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import MenuItem from "@mui/material/MenuItem";
 import Stack from "@mui/material/Stack";
 import Table from "@mui/material/Table";
@@ -15,7 +19,7 @@ import TableHead from "@mui/material/TableHead";
 import TableRow from "@mui/material/TableRow";
 import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
-import { ADMIN_NAV } from "@/features/admin/nav";
+import { adminShellNav } from "@/features/admin/nav";
 import PortalShell from "@/features/shell/PortalShell";
 import {
   EmptyState,
@@ -27,6 +31,8 @@ import { apiGet, apiPatch, apiPost, ApiError } from "@/lib/api";
 import { primaryCollegeId, resolveHomePath, useAuth } from "@/lib/auth";
 import { hasRole } from "@/lib/roles";
 import type { Bus, Campus, Driver } from "@/types/api";
+
+const { nav, navSections } = adminShellNav();
 
 /** Admin-settable fleet statuses (in_service is trip-managed). */
 const ADMIN_BUS_STATUSES = [
@@ -190,7 +196,7 @@ export default function AdminBusesPage() {
   if (loading || !user) return null;
   if (!collegeId) {
     return (
-      <PortalShell title="College admin" nav={[...ADMIN_NAV]}>
+      <PortalShell title="College admin" nav={nav} navSections={navSections}>
         <Alert severity="warning">No college membership on this account.</Alert>
       </PortalShell>
     );
@@ -201,13 +207,13 @@ export default function AdminBusesPage() {
   const inServiceCount = buses.filter((b) => b.status === "in_service").length;
 
   return (
-    <PortalShell title="College admin" description="Buses, seats, and drivers" nav={[...ADMIN_NAV]}>
+    <PortalShell title="College admin" nav={nav} navSections={navSections}>
       <PageHeader
         title="Buses"
-        description="Add each bus, how many students it can carry, and which driver runs it. One driver per bus."
+        description="Seats, drivers, and availability — one driver per bus."
         actions={
           <Button href="/admin/drivers" variant="outlined">
-            Manage drivers
+            Drivers
           </Button>
         }
       />
@@ -217,7 +223,7 @@ export default function AdminBusesPage() {
         </Alert>
       ) : null}
 
-      <Stack spacing={3}>
+      <Stack spacing={2.5}>
         <SectionCard title="Your buses">
           {buses.length === 0 ? (
             <EmptyState
@@ -293,8 +299,8 @@ export default function AdminBusesPage() {
                                 fullWidth
                                 helperText={
                                   b.status === "in_service"
-                                    ? "This bus is on a trip; you can still mark it out of service."
-                                    : "Out of service means maintenance or not in use"
+                                    ? "On a trip — can still mark out of service"
+                                    : undefined
                                 }
                               >
                                 {b.status === "in_service" ? (
@@ -387,66 +393,82 @@ export default function AdminBusesPage() {
           )}
         </SectionCard>
 
-        <SectionCard title="Add a bus">
-          <Stack spacing={2}>
-            <TextField
-              select
-              label="Campus"
-              value={campusId}
-              onChange={(e) => setCampusId(e.target.value)}
-              helperText={
-                campuses.length ? undefined : "Add a campus on the Home page first"
-              }
-              fullWidth
-            >
-              {campuses.map((c) => (
-                <MenuItem key={c.id} value={c.id}>
-                  {c.name} ({c.code})
-                </MenuItem>
-              ))}
-            </TextField>
-            <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
-              <TextField
-                label="Number plate"
-                placeholder="e.g. KA01PE1001"
-                value={registration}
-                onChange={(e) => setRegistration(e.target.value)}
-                fullWidth
-              />
-              <TextField
-                label="How many seats?"
-                placeholder="e.g. 40"
-                value={capacity}
-                onChange={(e) => setCapacity(e.target.value)}
-                fullWidth
-              />
+        <Accordion
+          defaultExpanded={buses.length === 0}
+          disableGutters
+          elevation={0}
+          sx={{
+            border: "1px solid",
+            borderColor: "divider",
+            borderRadius: 2,
+            "&:before": { display: "none" },
+          }}
+        >
+          <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+            <Typography variant="subtitle2">Add a bus</Typography>
+          </AccordionSummary>
+          <AccordionDetails>
+            <Stack spacing={1.5}>
               <TextField
                 select
-                label="Driver"
-                value={driverEmail}
-                onChange={(e) => setDriverEmail(e.target.value)}
+                label="Campus"
+                size="small"
+                value={campusId}
+                onChange={(e) => setCampusId(e.target.value)}
+                helperText={
+                  campuses.length ? undefined : "Add a campus on Home first"
+                }
                 fullWidth
               >
-                <MenuItem value="">None yet</MenuItem>
-                {drivers.map((d) => (
-                  <MenuItem key={d.user_id} value={d.email}>
-                    {d.email}
+                {campuses.map((c) => (
+                  <MenuItem key={c.id} value={c.id}>
+                    {c.name} ({c.code})
                   </MenuItem>
                 ))}
               </TextField>
+              <Stack direction={{ xs: "column", md: "row" }} spacing={1.5}>
+                <TextField
+                  label="Number plate"
+                  size="small"
+                  placeholder="e.g. KA01PE1001"
+                  value={registration}
+                  onChange={(e) => setRegistration(e.target.value)}
+                  fullWidth
+                />
+                <TextField
+                  label="Seats"
+                  size="small"
+                  placeholder="e.g. 55"
+                  value={capacity}
+                  onChange={(e) => setCapacity(e.target.value)}
+                  fullWidth
+                />
+                <TextField
+                  select
+                  label="Driver"
+                  size="small"
+                  value={driverEmail}
+                  onChange={(e) => setDriverEmail(e.target.value)}
+                  fullWidth
+                >
+                  <MenuItem value="">None yet</MenuItem>
+                  {drivers.map((d) => (
+                    <MenuItem key={d.user_id} value={d.email}>
+                      {d.email}
+                    </MenuItem>
+                  ))}
+                </TextField>
+              </Stack>
+              <Button
+                variant="contained"
+                onClick={() => void createBus()}
+                sx={{ alignSelf: "flex-start" }}
+              >
+                Add bus
+              </Button>
             </Stack>
-            <Typography variant="caption" color="text.secondary">
-              New buses start as available. Use Mark unavailable for maintenance.
-            </Typography>
-            <Button
-              variant="contained"
-              onClick={() => void createBus()}
-              sx={{ alignSelf: "flex-start" }}
-            >
-              Add bus
-            </Button>
-          </Stack>
-        </SectionCard>
+          </AccordionDetails>
+        </Accordion>
       </Stack>
     </PortalShell>
   );
