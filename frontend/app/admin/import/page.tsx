@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Accordion from "@mui/material/Accordion";
 import AccordionDetails from "@mui/material/AccordionDetails";
@@ -40,6 +40,15 @@ export default function AdminImportPage() {
   const [error, setError] = useState<string | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [activeOnly, setActiveOnly] = useState(true);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const historySyncKey = useRef<string | undefined>(undefined);
+
+  useEffect(() => {
+    const key = `${batches.length}:${batch?.id ?? ""}`;
+    if (historySyncKey.current === key) return;
+    historySyncKey.current = key;
+    setHistoryOpen(batches.length > 0 && !batch);
+  }, [batches.length, batch]);
 
   const loadBatches = useCallback(async () => {
     if (!collegeId) return;
@@ -182,7 +191,8 @@ export default function AdminImportPage() {
         ) : null}
 
         <Accordion
-          defaultExpanded={batches.length > 0 && !batch}
+          expanded={historyOpen}
+          onChange={(_, open) => setHistoryOpen(open)}
           disableGutters
           elevation={0}
           sx={{
